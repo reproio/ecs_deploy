@@ -8,6 +8,9 @@ module EcsDeploy
       @clients = {}
       regions = [EcsDeploy.config.default_region].compact if regions.nil? || regions.empty?
 
+      access_key_id ||= EcsDeploy.config.access_key_id
+      secret_access_key ||= EcsDeploy.config.secret_access_key
+
       if regions.empty?
         cl = Aws::ECS::Client.new(
           access_key_id: access_key_id,

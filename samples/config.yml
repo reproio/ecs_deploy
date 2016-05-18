@@ -1,0 +1,24 @@
+# ポーリング時にupscale_triggersに指定した状態のalarmがあればstep分serviceとinstanceを増やす (max_task_countまで)
+# ポーリング時にdownscale_triggersに指定した状態のalarmがあればstep分serviceとinstanceを減らす (min_task_countまで)
+# max_task_countは段階的にリミットを設けられるようにする
+# 一回リミットに到達するとcooldown_for_reach_maxを越えても状態が継続したら再開するようにする
+
+polling_interval: 300
+
+auto_scaling_groups:
+  - name: ecs-repro-development
+    region: ap-northeast-1
+    buffer: 6 # タスク数に対する余剰のインスタンス数
+
+services:
+  - name: repro-api-dev_staging
+    cluster: repro-development
+    region: ap-northeast-1
+    auto_scaling_group_name: ecs-repro-development
+    step: 2
+    max_task_count: [3, 5]
+    cooldown_time_for_reach_max: 600
+    min_task_count: 1
+    downscale_triggers:
+      - alarm_name: "AS ELB [repro-api-a] -instance by CPUUtilization"
+        state: ALARM

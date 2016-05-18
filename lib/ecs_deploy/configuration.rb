@@ -2,6 +2,8 @@ module EcsDeploy
   class Configuration
     attr_accessor \
       :log_level,
+      :access_key_id,
+      :secret_access_key,
       :default_region,
       :deploy_wait_timeout,
       :ecs_service_role

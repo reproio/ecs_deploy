@@ -1,0 +1,6 @@
+#!/usr/bin/env ruby
+
+require "ecs_deploy"
+require "ecs_deploy/auto_scaler"
+
+EcsDeploy::AutoScaler.run(*ARGV)
