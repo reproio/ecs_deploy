@@ -11,7 +11,7 @@ Main purpose is combination with capistrano API.
 Add this line to your application's Gemfile:
 
 ```ruby
-gem 'ecs_deploy', github: "joker1007/ecs_deploy"
+gem 'ecs_deploy', github: "reproio/ecs_deploy"
 ```
 
 And then execute:
@@ -66,8 +66,8 @@ set :ecs_tasks, [
       {
         name: "nginx",
         image: "#{fetch(:docker_registry_host_with_port)}/my-nginx",
-        cpu: cpu,
-        memory: memory,
+        cpu: 256,
+        memory: 256,
         links: [],
         port_mappings: [
           {container_port: 443, host_port: 443, protocol: "tcp"},
@@ -115,4 +115,3 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 ## Contributing
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/joker1007/ecs_deploy.
-
