@@ -11,16 +11,12 @@ Main purpose is combination with capistrano API.
 Add this line to your application's Gemfile:
 
 ```ruby
-gem 'ecs_deploy'
+gem 'ecs_deploy', github: "joker1007/ecs_deploy"
 ```
 
 And then execute:
 
     $ bundle
-
-Or install it yourself as:
-
-    $ gem install ecs_deploy
 
 ## Usage
 
