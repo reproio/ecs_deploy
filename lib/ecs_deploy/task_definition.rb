@@ -8,7 +8,15 @@ module EcsDeploy
       @task_definition_name = task_definition_name
       @regions = regions
 
-      @container_definitions = container_definitions
+      @container_definitions = container_definitions.map do |cd|
+        if cd[:docker_labels]
+          cd[:docker_labels] = cd[:docker_labels].map { |k, v| [k.to_s, v] }.to_h
+        end
+        if cd[:log_configuration] && cd[:log_configuration][:options]
+          cd[:log_configuration][:options] = cd[:log_configuration][:options].map { |k, v| [k.to_s, v] }.to_h
+        end
+        cd
+      end
       @volumes = volumes
     end
 
