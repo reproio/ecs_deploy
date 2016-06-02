@@ -52,6 +52,24 @@ module EcsDeploy
             raise "#{f.arn}: #{f.reason}"
           end
         end
+
+        wait_targets = Array(info[:wait_stop])
+        unless wait_targets.empty?
+          client.wait_until(:tasks_running, cluster: info[:cluster], tasks: resp.tasks.map { |t| t.task_arn })
+          client.wait_until(:tasks_stopped, cluster: info[:cluster], tasks: resp.tasks.map { |t| t.task_arn })
+
+          resp = client.describe_tasks(cluster: info[:cluster], tasks: resp.tasks.map { |t| t.task_arn })
+          resp.tasks.each do |t|
+            t.containers.each do |c|
+              next unless wait_targets.include?(c.name)
+
+              unless c.exit_code.zero?
+                raise "Task has errors: #{c.reason}"
+              end
+            end
+          end
+        end
+
         EcsDeploy.logger.info "run task [#{@task_definition_name} #{info.inspect}] [#{region}] [#{Paint['OK', :green]}]"
       end
     end
