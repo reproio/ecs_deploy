@@ -70,7 +70,6 @@ module EcsDeploy
       def load_config(yaml_path)
         @config = YAML.load_file(yaml_path)
         @polling_interval = @config["polling_interval"]
-        service_configs
       end
 
       def service_configs
