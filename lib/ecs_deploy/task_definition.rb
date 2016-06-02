@@ -54,8 +54,8 @@ module EcsDeploy
         end
 
         if info[:wait_stop]
-          client.wait_until(:tasks_running, cluster: info[:cluster], task_definition: [@task_definition_name])
-          client.wait_until(:tasks_stopped, cluster: info[:cluster], task_definition: [@task_definition_name])
+          client.wait_until(:tasks_running, cluster: info[:cluster], tasks: resp.tasks.map { |t| t.task_arn })
+          client.wait_until(:tasks_stopped, cluster: info[:cluster], tasks: resp.tasks.map { |t| t.task_arn })
         end
 
         EcsDeploy.logger.info "run task [#{@task_definition_name} #{info.inspect}] [#{region}] [#{Paint['OK', :green]}]"
