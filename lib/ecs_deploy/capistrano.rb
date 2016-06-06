@@ -23,6 +23,13 @@ namespace :ecs do
       c.deploy_wait_timeout = fetch(:ecs_deploy_wait_timeout) if fetch(:ecs_deploy_wait_timeout)
       c.ecs_service_role = fetch(:ecs_service_role) if fetch(:ecs_service_role)
     end
+
+    if ENV["TARGET_CLUSTER"]
+      set :target_cluster, ENV["TARGET_CLUSTER"].split(",").map(&:strip)
+    end
+    if ENV["TARGET_TASK_DEFINITION"]
+      set :target_task_definition, ENV["TARGET_TASK_DEFINITION"].split(",").map(&:strip)
+    end
   end
 
   task register_task_definition: [:configure] do
@@ -47,6 +54,13 @@ namespace :ecs do
   task deploy: [:configure, :register_task_definition] do
     if fetch(:ecs_services)
       services = fetch(:ecs_services).map do |service|
+        if fetch(:target_cluster) && fetch(:target_cluster).size > 0
+          next unless fetch(:target_cluster).include?(service[:cluster])
+        end
+        if fetch(:target_task_definition) && fetch(:target_task_definition).size > 0
+          next unless fetch(:target_task_definition).include?(service[:task_definition_name])
+        end
+
         service_options = {
           handler: ecs_handler,
           cluster: service[:cluster] || fetch(:ecs_default_cluster),
@@ -65,7 +79,7 @@ namespace :ecs do
         s.deploy
         s
       end
-      services.each(&:wait_running)
+      services.compact.each(&:wait_running)
     end
   end
 end
