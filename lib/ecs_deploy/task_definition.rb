@@ -20,6 +20,16 @@ module EcsDeploy
       @volumes = volumes
     end
 
+    def recent_task_definition_arns
+      resp = client.list_task_definitions(
+        family_prefix: @task_definition_name,
+        sort: "DESC"
+      )
+      resp.task_definition_arns
+    rescue
+      []
+    end
+
     def register
       @handler.clients.each do |region, client|
         next if !@regions.empty? && !@regions.include?(region)
