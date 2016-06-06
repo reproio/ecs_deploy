@@ -66,7 +66,46 @@ namespace :ecs do
           cluster: service[:cluster] || fetch(:ecs_default_cluster),
           service_name: service[:name],
           task_definition_name: service[:task_definition_name],
-          revision: service[:revision],
+          elb_name: service[:elb_name],
+          elb_service_port: service[:elb_service_port],
+          elb_healthcheck_port: service[:elb_healthcheck_port],
+          elb_container_name: service[:elb_container_name],
+          desired_count: service[:desired_count],
+          regions: service[:regions] || [],
+        }
+        service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
+        s = EcsDeploy::Service.new(service_options)
+        s.deploy
+        s
+      end
+      services.compact.each(&:wait_running)
+    end
+  end
+
+  task rollback: [:configure] do
+    if fetch(:ecs_services)
+      services = fetch(:ecs_services).map do |service|
+        if fetch(:target_cluster) && fetch(:target_cluster).size > 0
+          next unless fetch(:target_cluster).include?(service[:cluster])
+        end
+        if fetch(:target_task_definition) && fetch(:target_task_definition).size > 0
+          next unless fetch(:target_task_definition).include?(service[:task_definition_name])
+        end
+
+        task_definition_arns = EcsDeploy::TaskDefinition.new(
+          handler: ecs_handler,
+          task_definition_name: service[:task_definition_name] || service[:name],
+        ).recent_task_definition_arns
+
+        rollback_step = (ENV["STEP"] || 1).to_i
+
+        raise "Past task_definition_arns is nothing" if task_definition_arns.size >= rollback_step + 1
+
+        service_options = {
+          handler: ecs_handler,
+          cluster: service[:cluster] || fetch(:ecs_default_cluster),
+          service_name: service[:name],
+          task_definition_name: task_definition_arns[rollback_step],
           elb_name: service[:elb_name],
           elb_service_port: service[:elb_service_port],
           elb_healthcheck_port: service[:elb_healthcheck_port],
