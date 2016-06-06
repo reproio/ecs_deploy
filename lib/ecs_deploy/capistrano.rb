@@ -99,7 +99,7 @@ namespace :ecs do
 
         rollback_step = (ENV["STEP"] || 1).to_i
 
-        raise "Past task_definition_arns is nothing" if task_definition_arns.size >= rollback_step + 1
+        raise "Past task_definition_arns is nothing" if task_definition_arns.size <= rollback_step
 
         service_options = {
           handler: ecs_handler,
