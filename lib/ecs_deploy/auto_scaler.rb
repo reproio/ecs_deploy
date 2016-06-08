@@ -25,6 +25,8 @@ module EcsDeploy
 
       def run_loop
         service_configs.each do |s|
+          next if s.idle?
+
           difference = 0
           s.upscale_triggers.each do |trigger|
             step = trigger.step || s.step
@@ -97,13 +99,14 @@ module EcsDeploy
       end
     end
 
-    SERVICE_CONFIG_ATTRIBUTES = %i(name cluster region auto_scaling_group_name step max_task_count min_task_count cooldown_time_for_reach_max upscale_triggers downscale_triggers desired_count)
+    SERVICE_CONFIG_ATTRIBUTES = %i(name cluster region auto_scaling_group_name step max_task_count min_task_count idle_time cooldown_time_for_reach_max upscale_triggers downscale_triggers desired_count)
     ServiceConfig = Struct.new(*SERVICE_CONFIG_ATTRIBUTES) do
       include ConfigBase
       extend ConfigBase::ClassMethods
 
       def initialize(attributes = {})
         super(attributes)
+        self.idle_time ||= 60
         self.max_task_count = Array(max_task_count)
         self.upscale_triggers = upscale_triggers.to_a.map do |t|
           TriggerConfig.new(t.merge(region: region))
@@ -114,6 +117,7 @@ module EcsDeploy
         self.max_task_count.sort!
         self.desired_count = fetch_service.desired_count
         @reach_max_at = nil
+        @last_updated_at = nil
       end
 
       def client
@@ -122,6 +126,11 @@ module EcsDeploy
           secret_access_key: EcsDeploy.config.secret_access_key,
           region: region
         )
+      end
+
+      def idle?
+        return false unless @last_updated_at
+        (Time.now - @last_updated_at) < idle_time
       end
 
       def overheat?
@@ -169,6 +178,7 @@ module EcsDeploy
           service: name,
           desired_count: next_desired_count,
         )
+        @last_updated_at = Time.now
         self.desired_count = next_desired_count
         AutoScaler.logger.info "Update service \"#{name}\": desired_count -> #{next_desired_count}"
       rescue => e
