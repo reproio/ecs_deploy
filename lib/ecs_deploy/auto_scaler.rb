@@ -9,7 +9,9 @@ module EcsDeploy
       def run(yaml_path, log_file = nil, error_log_file = nil)
         trap(:TERM) { @stop = true }
         @logger = Logger.new(log_file || STDOUT)
+        STDOUT.sync = true unless log_file
         @error_logger = Logger.new(error_log_file || STDERR)
+        STDERR.sync = true unless error_log_file
         load_config(yaml_path)
 
         until @stop
