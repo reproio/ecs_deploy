@@ -7,7 +7,7 @@ module EcsDeploy
       attr_reader :logger, :error_logger
 
       def run(yaml_path, log_file = nil, error_log_file = nil)
-        trap(:TERM) { @stop = true }
+        trap(:TERM) { exit 0 }
         @logger = Logger.new(log_file || STDOUT)
         STDOUT.sync = true unless log_file
         @error_logger = Logger.new(error_log_file || STDERR)
