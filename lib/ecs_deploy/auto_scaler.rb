@@ -39,7 +39,7 @@ module EcsDeploy
             end
           end
 
-          if difference == 0 && s.desired_count > s.min_task_count
+          if difference == 0 && s.desired_count > s.current_min_task_count
             s.downscale_triggers.each do |trigger|
               if trigger.match?
                 logger.info "Fire downscale trigger of #{s.name} by #{trigger.alarm_name} #{trigger.state}"
@@ -49,8 +49,8 @@ module EcsDeploy
             end
           end
 
-          if s.min_task_count > s.desired_count + difference
-            difference = s.min_task_count - s.desired_count
+          if s.current_min_task_count > s.desired_count + difference
+            difference = s.current_min_task_count - s.desired_count
           end
 
           if difference >= 0 && s.desired_count > s.max_task_count.max
@@ -135,10 +135,10 @@ module EcsDeploy
         (Time.now - @last_updated_at) < idle_time
       end
 
-      def min_task_count
-        return super if scheduled_min_task_count.nil? || scheduled_min_task_count.empty?
+      def current_min_task_count
+        return min_task_count if scheduled_min_task_count.nil? || scheduled_min_task_count.empty?
 
-        scheduled_min_task_count.find(-> { {"count" => super} }) { |s|
+        scheduled_min_task_count.find(-> { {"count" => min_task_count} }) { |s|
           from = Time.parse(s["from"])
           to = Time.parse(s["to"])
           (from..to).cover?(Time.now)
