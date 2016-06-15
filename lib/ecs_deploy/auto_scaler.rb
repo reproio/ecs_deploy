@@ -1,5 +1,6 @@
 require 'yaml'
 require 'logger'
+require 'time'
 
 module EcsDeploy
   module AutoScaler
@@ -44,11 +45,12 @@ module EcsDeploy
                 logger.info "Fire downscale trigger of #{s.name} by #{trigger.alarm_name} #{trigger.state}"
                 step = trigger.step || s.step
                 difference = [difference, -(step)].min
-                if s.min_task_count > s.desired_count + difference
-                  difference = s.min_task_count - s.desired_count
-                end
               end
             end
+          end
+
+          if s.min_task_count > s.desired_count + difference
+            difference = s.min_task_count - s.desired_count
           end
 
           if difference >= 0 && s.desired_count > s.max_task_count.max
@@ -99,7 +101,7 @@ module EcsDeploy
       end
     end
 
-    SERVICE_CONFIG_ATTRIBUTES = %i(name cluster region auto_scaling_group_name step max_task_count min_task_count idle_time cooldown_time_for_reach_max upscale_triggers downscale_triggers desired_count)
+    SERVICE_CONFIG_ATTRIBUTES = %i(name cluster region auto_scaling_group_name step max_task_count min_task_count idle_time scheduled_min_task_count cooldown_time_for_reach_max upscale_triggers downscale_triggers desired_count)
     ServiceConfig = Struct.new(*SERVICE_CONFIG_ATTRIBUTES) do
       include ConfigBase
       extend ConfigBase::ClassMethods
@@ -131,6 +133,16 @@ module EcsDeploy
       def idle?
         return false unless @last_updated_at
         (Time.now - @last_updated_at) < idle_time
+      end
+
+      def min_task_count
+        return super if scheduled_min_task_count.nil? || scheduled_min_task_count.empty?
+
+        scheduled_min_task_count.find(-> { {"count" => super} }) { |s|
+          from = Time.parse(s["from"])
+          to = Time.parse(s["to"])
+          (from..to).cover?(Time.now)
+        }["count"]
       end
 
       def overheat?
