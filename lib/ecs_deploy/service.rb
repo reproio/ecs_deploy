@@ -7,7 +7,7 @@ module EcsDeploy
     def initialize(
       handler:, cluster:, service_name:, task_definition_name: nil, revision: nil,
       elb_name: nil, elb_service_port: nil, elb_healthcheck_port: nil, elb_container_name: nil,
-      desired_count: 1, deployment_configuration: {maximum_percent: 200, minimum_healthy_percent: 100},
+      desired_count: nil, deployment_configuration: {maximum_percent: 200, minimum_healthy_percent: 100},
       regions: []
     )
       @handler = handler
@@ -33,7 +33,6 @@ module EcsDeploy
         service_options = {
           cluster: @cluster,
           task_definition: task_definition_name_with_revision,
-          desired_count: @desired_count,
           deployment_configuration: @deployment_configuration,
         }
         if res.services.empty?
@@ -41,6 +40,7 @@ module EcsDeploy
           if @elb_name
             service_options.merge!({
               role: EcsDeploy.config.ecs_service_role,
+              desired_count: @desired_count.to_i,
               load_balancers: [
                 {
                   load_balancer_name: @elb_name,
@@ -54,6 +54,7 @@ module EcsDeploy
           EcsDeploy.logger.info "create service [#{@service_name}] [#{region}] [#{Paint['OK', :green]}]"
         else
           service_options.merge!({service: @service_name})
+          service_options.merge!({desired_count: @desired_count}) if @desired_count
           @responses[region] = client.update_service(service_options)
           EcsDeploy.logger.info "update service [#{@service_name}] [#{region}] [#{Paint['OK', :green]}]"
         end
