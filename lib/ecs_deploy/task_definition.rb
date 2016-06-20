@@ -1,12 +1,11 @@
 module EcsDeploy
   class TaskDefinition
     def initialize(
-      handler:, task_definition_name:, regions: [],
+      task_definition_name:, region: nil,
       volumes: [], container_definitions: []
     )
-      @handler = handler
       @task_definition_name = task_definition_name
-      @regions = regions
+      @region = region || EcsDeploy.config.default_region || ENV["AWS_DEFAULT_REGION"]
 
       @container_definitions = container_definitions.map do |cd|
         if cd[:docker_labels]
@@ -18,10 +17,12 @@ module EcsDeploy
         cd
       end
       @volumes = volumes
+
+      @client = Aws::ECS::Client.new(region: @region)
     end
 
     def recent_task_definition_arns
-      resp = client.list_task_definitions(
+      resp = @client.list_task_definitions(
         family_prefix: @task_definition_name,
         sort: "DESC"
       )
@@ -31,57 +32,48 @@ module EcsDeploy
     end
 
     def register
-      @handler.clients.each do |region, client|
-        next if !@regions.empty? && !@regions.include?(region)
-
-        client.register_task_definition({
-          family: @task_definition_name,
-          container_definitions: @container_definitions,
-          volumes: @volumes,
-        })
-        EcsDeploy.logger.info "register task definition [#{@task_definition_name}] [#{region}] [#{Paint['OK', :green]}]"
-      end
+      @client.register_task_definition({
+        family: @task_definition_name,
+        container_definitions: @container_definitions,
+        volumes: @volumes,
+      })
+      EcsDeploy.logger.info "register task definition [#{@task_definition_name}] [#{@region}] [#{Paint['OK', :green]}]"
     end
 
     def run(info)
-      regions = info[:regions] || []
-      @handler.clients.each do |region, client|
-        next if !regions.empty? && !regions.include?(region)
-
-        resp = client.run_task({
-          cluster: info[:cluster],
-          task_definition: @task_definition_name,
-          overrides: {
-            container_overrides: info[:container_overrides] || []
-          },
-          count: info[:count] || 1,
-          started_by: "capistrano",
-        })
-        unless resp.failures.empty?
-          resp.failures.each do |f|
-            raise "#{f.arn}: #{f.reason}"
-          end
+      resp = @client.run_task({
+        cluster: info[:cluster],
+        task_definition: @task_definition_name,
+        overrides: {
+          container_overrides: info[:container_overrides] || []
+        },
+        count: info[:count] || 1,
+        started_by: "capistrano",
+      })
+      unless resp.failures.empty?
+        resp.failures.each do |f|
+          raise "#{f.arn}: #{f.reason}"
         end
+      end
 
-        wait_targets = Array(info[:wait_stop])
-        unless wait_targets.empty?
-          client.wait_until(:tasks_running, cluster: info[:cluster], tasks: resp.tasks.map { |t| t.task_arn })
-          client.wait_until(:tasks_stopped, cluster: info[:cluster], tasks: resp.tasks.map { |t| t.task_arn })
+      wait_targets = Array(info[:wait_stop])
+      unless wait_targets.empty?
+        @client.wait_until(:tasks_running, cluster: info[:cluster], tasks: resp.tasks.map { |t| t.task_arn })
+        @client.wait_until(:tasks_stopped, cluster: info[:cluster], tasks: resp.tasks.map { |t| t.task_arn })
 
-          resp = client.describe_tasks(cluster: info[:cluster], tasks: resp.tasks.map { |t| t.task_arn })
-          resp.tasks.each do |t|
-            t.containers.each do |c|
-              next unless wait_targets.include?(c.name)
+        resp = @client.describe_tasks(cluster: info[:cluster], tasks: resp.tasks.map { |t| t.task_arn })
+        resp.tasks.each do |t|
+          t.containers.each do |c|
+            next unless wait_targets.include?(c.name)
 
-              unless c.exit_code.zero?
-                raise "Task has errors: #{c.reason}"
-              end
+            unless c.exit_code.zero?
+              raise "Task has errors: #{c.reason}"
             end
           end
         end
-
-        EcsDeploy.logger.info "run task [#{@task_definition_name} #{info.inspect}] [#{region}] [#{Paint['OK', :green]}]"
       end
+
+      EcsDeploy.logger.info "run task [#{@task_definition_name} #{info.inspect}] [#{@region}] [#{Paint['OK', :green]}]"
     end
   end
 end

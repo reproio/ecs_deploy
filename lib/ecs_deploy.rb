@@ -24,6 +24,5 @@ module EcsDeploy
   end
 end
 
-require "ecs_deploy/ecs_handler"
 require "ecs_deploy/task_definition"
 require "ecs_deploy/service"
