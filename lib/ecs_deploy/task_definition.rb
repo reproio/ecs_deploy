@@ -2,7 +2,7 @@ module EcsDeploy
   class TaskDefinition
     def initialize(
       handler:, task_definition_name:, regions: [],
-      volumes: [], container_definitions:
+      volumes: [], container_definitions: []
     )
       @handler = handler
       @task_definition_name = task_definition_name
