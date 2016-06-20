@@ -87,12 +87,12 @@ namespace :ecs do
             next unless fetch(:target_task_definition).include?(service[:task_definition_name])
           end
 
-        task_definition_arns = EcsDeploy::TaskDefinition.new(
-          region: r,
-          task_definition_name: service[:task_definition_name] || service[:name],
-        ).recent_task_definition_arns
+          task_definition_arns = EcsDeploy::TaskDefinition.new(
+            region: r,
+            task_definition_name: service[:task_definition_name] || service[:name],
+          ).recent_task_definition_arns
 
-        rollback_step = (ENV["STEP"] || 1).to_i
+          rollback_step = (ENV["STEP"] || 1).to_i
 
           current_task_definition_arn = EcsDeploy::Service.new(
             region: r,
