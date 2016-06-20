@@ -6,7 +6,7 @@ namespace :ecs do
       c.log_level = fetch(:ecs_log_level) if fetch(:ecs_log_level)
       c.deploy_wait_timeout = fetch(:ecs_deploy_wait_timeout) if fetch(:ecs_deploy_wait_timeout)
       c.ecs_service_role = fetch(:ecs_service_role) if fetch(:ecs_service_role)
-      c.default_region = fetch(:ecs_region) if fetch(:ecs_region)
+      c.default_region = Array(fetch(:ecs_region))[0] if fetch(:ecs_region)
     end
 
     if ENV["TARGET_CLUSTER"]
@@ -79,7 +79,7 @@ namespace :ecs do
       regions = Array(fetch(:ecs_region))
       regions = [nil] if regions.empty?
       regions.each do |r|
-        services = fetch(:ecs_services).flat_map do |service|
+        services = fetch(:ecs_services).map do |service|
           if fetch(:target_cluster) && fetch(:target_cluster).size > 0
             next unless fetch(:target_cluster).include?(service[:cluster])
           end
@@ -87,34 +87,45 @@ namespace :ecs do
             next unless fetch(:target_task_definition).include?(service[:task_definition_name])
           end
 
-          task_definition_arns = EcsDeploy::TaskDefinition.new(
+        task_definition_arns = EcsDeploy::TaskDefinition.new(
+          region: r,
+          task_definition_name: service[:task_definition_name] || service[:name],
+        ).recent_task_definition_arns
+
+        rollback_step = (ENV["STEP"] || 1).to_i
+
+          current_task_definition_arn = EcsDeploy::Service.new(
             region: r,
-            task_definition_name: service[:task_definition_name] || service[:name],
-          ).recent_task_definition_arns
+            cluster: service[:cluster] || fetch(:ecs_default_cluster),
+            service_name: service[:name],
+          ).current_task_definition_arn
 
-          rollback_step = (ENV["STEP"] || 1).to_i
-
-          task_definition_arns.map do |_, arns|
-            raise "Past task_definition_arns is nothing" if arns.size <= rollback_step
-
-            puts "arns[0] => arns[rollback_step]"
-
-            service_options = {
-              region: r,
-              cluster: service[:cluster] || fetch(:ecs_default_cluster),
-              service_name: service[:name],
-              task_definition_name: arns[rollback_step],
-              elb_name: service[:elb_name],
-              elb_service_port: service[:elb_service_port],
-              elb_healthcheck_port: service[:elb_healthcheck_port],
-              elb_container_name: service[:elb_container_name],
-              desired_count: service[:desired_count],
-            }
-            service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
-            s = EcsDeploy::Service.new(service_options)
-            s.deploy
-            s
+          current_arn_index = task_definition_arns.index do |arn|
+            arn == current_task_definition_arn
           end
+
+          rollback_arn = task_definition_arns[current_arn_index + rollback_step]
+
+          EcsDeploy.logger.info "#{current_task_definition_arn} -> #{rollback_arn}"
+
+          raise "Past task_definition_arns is nothing" unless rollback_arn
+
+          service_options = {
+            region: r,
+            cluster: service[:cluster] || fetch(:ecs_default_cluster),
+            service_name: service[:name],
+            task_definition_name: rollback_arn,
+            elb_name: service[:elb_name],
+            elb_service_port: service[:elb_service_port],
+            elb_healthcheck_port: service[:elb_healthcheck_port],
+            elb_container_name: service[:elb_container_name],
+            desired_count: service[:desired_count],
+          }
+          service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
+          s = EcsDeploy::Service.new(service_options)
+          s.deploy
+          EcsDeploy::TaskDefinition.deregister(current_task_definition_arn, region: r)
+          s
         end
         EcsDeploy::Service.wait_all_running(services)
       end

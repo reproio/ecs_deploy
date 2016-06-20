@@ -1,5 +1,14 @@
 module EcsDeploy
   class TaskDefinition
+    def self.deregister(arn, region: nil)
+      region = region || EcsDeploy.config.default_region || ENV["AWS_DEFAULT_REGION"]
+      client = Aws::ECS::Client.new(region: region)
+      client.deregister_task_definition({
+        task_definition: arn,
+      })
+      EcsDeploy.logger.info "deregister task definition [#{arn}] [#{region}] [#{Paint['OK', :green]}]"
+    end
+
     def initialize(
       task_definition_name:, region: nil,
       volumes: [], container_definitions: []

@@ -27,6 +27,11 @@ module EcsDeploy
       @client = Aws::ECS::Client.new(region: @region)
     end
 
+    def current_task_definition_arn
+      res = @client.describe_services(cluster: @cluster, services: [@service_name])
+      res.services[0].task_definition
+    end
+
     def deploy
       res = @client.describe_services(cluster: @cluster, services: [@service_name])
       service_options = {
