@@ -3,6 +3,7 @@ require 'timeout'
 module EcsDeploy
   class Service
     CHECK_INTERVAL = 5
+    attr_reader :cluster, :region, :service_name
 
     def initialize(
       cluster:, service_name:, task_definition_name: nil, revision: nil,
@@ -64,26 +65,24 @@ module EcsDeploy
       service = @response.service
       deployment = nil
 
-      # wait deployment start
-      Timeout.timeout(EcsDeploy.config.deploy_wait_timeout) do
-        begin
-          sleep CHECK_INTERVAL
-          service = @client.describe_services(cluster: @cluster, services: [service.service_name]).services[0]
-        end until service.deployments.find { |d| service.task_definition == d.task_definition }
-      end
-      EcsDeploy.logger.info "start ECS deployment [#{service.service_name}] [#{@region}] [#{Paint['OK', :green]}]"
+      @client.wait_until(:services_stable, cluster: @cluster, services: [service.service_name]) do |w|
+        w.delay = 10
 
-      Timeout.timeout(EcsDeploy.config.deploy_wait_timeout) do
-        begin
-          sleep CHECK_INTERVAL
-          service = @client.describe_services(cluster: @cluster, services: [service.service_name]).services[0]
-          deployment = service.deployments.find { |d| service.task_definition == d.task_definition }
-          rows = []
-          rows << [service.status, deployment.desired_count, deployment.pending_count, deployment.running_count]
-          table = Terminal::Table.new headings: ['Status', 'Desired Count', 'Pending Count', 'Running Count'], rows: rows
-          puts table
-        end until deployment.pending_count == 0 && deployment.desired_count == deployment.running_count
-        EcsDeploy.logger.info "finish ECS deployment [#{service.service_name}] [#{@region}] [#{Paint['OK', :green]}]"
+        w.before_attempt do
+          EcsDeploy.logger.info "wait service stable [#{service.service_name}]"
+        end
+      end
+    end
+
+    def self.wait_all_running(services)
+      services.group_by { |s| [s.cluster, s.region] }.each do |(cl, region), ss|
+        client = Aws::ECS::Client.new(region: region)
+        service_names = ss.map(&:service_name)
+        client.wait_until(:services_stable, cluster: cl, services: service_names) do |w|
+          w.before_attempt do
+            EcsDeploy.logger.info "wait service stable [#{service_names.join(", ")}]"
+          end
+        end
       end
     end
 

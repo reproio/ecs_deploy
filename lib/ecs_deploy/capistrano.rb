@@ -69,7 +69,7 @@ namespace :ecs do
           s.deploy
           s
         end
-        services.compact.each(&:wait_running)
+        EcsDeploy::Service.wait_all_running(services)
       end
     end
   end
@@ -116,7 +116,7 @@ namespace :ecs do
             s
           end
         end
-        services.compact.each(&:wait_running)
+        EcsDeploy::Service.wait_all_running(services)
       end
     end
   end
