@@ -106,6 +106,107 @@ set :ecs_services, [
 ]
 ```
 
+```sh
+cap <stage> ecs:register_task_definition # register ecs_tasks as TaskDefinition
+cap <stage> ecs:deploy # create or update Service by ecs_services info
+
+cap <stage> ecs:rollback # deregister current task definition and update Service by previous revision of current task definition
+```
+
+### Rollback example
+
+| sequence | taskdef  | service       | desc    |
+| -------- | -------- | ------------- | ------  |
+| 1        | myapp:12 | myapp-service |         |
+| 2        | myapp:13 | myapp-service |         |
+| 3        | myapp:14 | myapp-service | current |
+
+After rollback
+
+| sequence | taskdef  | service       | desc       |
+| -------- | -------- | ------------- | ------     |
+| 1        | myapp:12 | myapp-service |            |
+| 2        | myapp:13 | myapp-service |            |
+| 3        | myapp:14 | myapp-service | deregister |
+| 4        | myapp:13 | myapp-service | current    |
+
+And rollback again
+
+| sequence | taskdef  | service       | desc       |
+| -------- | -------- | ------------- | ------     |
+| 1        | myapp:12 | myapp-service |            |
+| 2        | myapp:13 | myapp-service | previous   |
+| 3        | myapp:14 | myapp-service | deregister |
+| 4        | myapp:13 | myapp-service | deregister |
+| 5        | myapp:12 | myapp-service | current    |
+
+And deploy new version
+
+| sequence | taskdef  | service       | desc       |
+| -------- | -------- | ------------- | ------     |
+| 1        | myapp:12 | myapp-service |            |
+| 2        | myapp:13 | myapp-service |            |
+| 3        | myapp:14 | myapp-service | deregister |
+| 4        | myapp:13 | myapp-service | deregister |
+| 5        | myapp:12 | myapp-service |            |
+| 6        | myapp:15 | myapp-service | current    |
+
+And rollback
+
+| sequence | taskdef  | service       | desc       |
+| -------- | -------- | ------------- | ------     |
+| 1        | myapp:12 | myapp-service |            |
+| 2        | myapp:13 | myapp-service |            |
+| 3        | myapp:14 | myapp-service | deregister |
+| 4        | myapp:13 | myapp-service | deregister |
+| 5        | myapp:12 | myapp-service |            |
+| 6        | myapp:15 | myapp-service | deregister |
+| 7        | myapp:12 | myapp-service | current    |
+
+## Autoscaler
+
+Write config file (YAML format).
+
+```yaml
+# ポーリング時にupscale_triggersに指定した状態のalarmがあればstep分serviceとinstanceを増やす (max_task_countまで)
+# ポーリング時にdownscale_triggersに指定した状態のalarmがあればstep分serviceとinstanceを減らす (min_task_countまで)
+# max_task_countは段階的にリミットを設けられるようにする
+# 一回リミットに到達するとcooldown_for_reach_maxを越えても状態が継続したら再開するようにする
+
+polling_interval: 60
+
+auto_scaling_groups:
+  - name: ecs-cluster-nodes
+    region: ap-northeast-1
+    buffer: 1 # タスク数に対する余剰のインスタンス数
+
+services:
+  - name: repro-api-production
+    cluster: ecs-cluster
+    region: ap-northeast-1
+    auto_scaling_group_name: ecs-cluster-nodes
+    step: 1
+    idle_time: 240
+    max_task_count: [10, 25]
+    cooldown_time_for_reach_max: 600
+    min_task_count: 0
+    upscale_triggers:
+      - alarm_name: "ECS [repro-api-production] CPUUtilization"
+        state: ALARM
+      - alarm_name: "ELB repro-api-a HTTPCode_Backend_5XX"
+        state: ALARM
+        step: 2
+    downscale_triggers:
+      - alarm_name: "ECS [repro-api-production] CPUUtilization (low)"
+        state: OK
+```
+
+```sh
+ecs_auto_scaler <config yaml>
+```
+
+I recommends deploy `ecs_auto_scaler` on ECS too.
+
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
