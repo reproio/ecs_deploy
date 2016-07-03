@@ -40,11 +40,13 @@ module EcsDeploy
         deployment_configuration: @deployment_configuration,
       }
       if res.services.empty?
-        service_options.merge!({service_name: @service_name})
+        service_options.merge!({
+          service_name: @service_name,
+          desired_count: @desired_count.to_i,
+        })
         if @elb_name
           service_options.merge!({
             role: EcsDeploy.config.ecs_service_role,
-            desired_count: @desired_count.to_i,
             load_balancers: [
               {
                 load_balancer_name: @elb_name,
