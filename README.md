@@ -188,6 +188,8 @@ services:
     step: 1
     idle_time: 240
     max_task_count: [10, 25]
+    scheduled_min_task_count:
+      - {from: "1:45", to: "4:30", count: 8}
     cooldown_time_for_reach_max: 600
     min_task_count: 0
     upscale_triggers:
