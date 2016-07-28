@@ -1,6 +1,7 @@
 require "ecs_deploy/version"
 require "ecs_deploy/configuration"
 
+require 'aws-sdk'
 require 'logger'
 require 'terminal-table'
 require 'paint'
