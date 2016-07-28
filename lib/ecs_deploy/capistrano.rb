@@ -78,6 +78,8 @@ namespace :ecs do
     if fetch(:ecs_services)
       regions = Array(fetch(:ecs_region))
       regions = [nil] if regions.empty?
+
+      rollback_routes = {}
       regions.each do |r|
         services = fetch(:ecs_services).map do |service|
           if fetch(:target_cluster) && fetch(:target_cluster).size > 0
@@ -100,11 +102,15 @@ namespace :ecs do
             service_name: service[:name],
           ).current_task_definition_arn
 
-          current_arn_index = task_definition_arns.index do |arn|
-            arn == current_task_definition_arn
-          end
+          unless (rollback_arn = rollback_routes[current_task_definition_arn])
+            current_arn_index = task_definition_arns.index do |arn|
+              arn == current_task_definition_arn
+            end
 
-          rollback_arn = task_definition_arns[current_arn_index + rollback_step]
+            rollback_arn = task_definition_arns[current_arn_index + rollback_step]
+
+            rollback_routes[current_task_definition_arn] = rollback_arn
+          end
 
           EcsDeploy.logger.info "#{current_task_definition_arn} -> #{rollback_arn}"
 
