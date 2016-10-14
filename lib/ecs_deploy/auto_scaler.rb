@@ -8,74 +8,82 @@ module EcsDeploy
       attr_reader :logger, :error_logger
 
       def run(yaml_path, log_file = nil, error_log_file = nil)
-        trap(:TERM) { exit 0 }
+        trap(:TERM) { @stop = true }
+        trap(:INT) { @stop = true }
         @logger = Logger.new(log_file || STDOUT)
+        @logger.level = Logger.const_get(ENV["ECS_AUTO_SCALER_LOG_LEVEL"].upcase) if ENV["ECS_AUTO_SCALER_LOG_LEVEL"]
         STDOUT.sync = true unless log_file
         @error_logger = Logger.new(error_log_file || STDERR)
+        @error_logger.level = Logger.const_get(ENV["ECS_AUTO_SCALER_LOG_LEVEL"].upcase) if ENV["ECS_AUTO_SCALER_LOG_LEVEL"]
         STDERR.sync = true unless error_log_file
         load_config(yaml_path)
+        service_configs
+        auto_scaling_group_configs
 
-        until @stop
-          run_loop
+        config_groups = service_configs.group_by { |s| [s.region, s.auto_scaling_group_name] }
+        ths = config_groups.map do |(region, auto_scaling_group_name), configs|
+          asg_config = auto_scaling_group_configs.find { |c| c.name == auto_scaling_group_name && c.region == region }
+          Thread.new(asg_config, configs, &method(:main_loop))
         end
+
+        ths.each(&:join)
       end
 
-      def stop
-        @stop = true
-      end
+      def main_loop(asg_config, configs)
+        loop_with_polling_interval("loop of #{asg_config.name}") do
+          ths = configs.map do |service_config|
+            Thread.new(service_config) do |s|
+              next if s.idle?
 
-      def run_loop
-        service_configs.each do |s|
-          next if s.idle?
+              @logger.debug "Start service scaling of #{s.name}"
 
-          difference = 0
-          s.upscale_triggers.each do |trigger|
-            step = trigger.step || s.step
-            next if difference >= step
-
-            if trigger.match?
-              logger.info "Fire upscale trigger of #{s.name} by #{trigger.alarm_name} #{trigger.state}"
-              difference = step
-            end
-          end
-
-          if difference == 0 && s.desired_count > s.current_min_task_count
-            s.downscale_triggers.each do |trigger|
-              if trigger.match?
-                logger.info "Fire downscale trigger of #{s.name} by #{trigger.alarm_name} #{trigger.state}"
+              difference = 0
+              s.upscale_triggers.each do |trigger|
                 step = trigger.step || s.step
-                difference = [difference, -(step)].min
+                next if difference >= step
+
+                if trigger.match?
+                  logger.info "Fire upscale trigger of #{s.name} by #{trigger.alarm_name} #{trigger.state}"
+                  difference = step
+                end
+              end
+
+              if difference == 0 && s.desired_count > s.current_min_task_count
+                s.downscale_triggers.each do |trigger|
+                  next unless trigger.match?
+
+                  logger.info "Fire downscale trigger of #{s.name} by #{trigger.alarm_name} #{trigger.state}"
+                  step = trigger.step || s.step
+                  difference = [difference, -step].min
+                end
+              end
+
+              if s.current_min_task_count > s.desired_count + difference
+                difference = s.current_min_task_count - s.desired_count
+              end
+
+              if difference >= 0 && s.desired_count > s.max_task_count.max
+                difference = s.max_task_count.max - s.desired_count
+              end
+
+              if difference != 0
+                s.update_service(s.desired_count + difference)
               end
             end
           end
 
-          if s.current_min_task_count > s.desired_count + difference
-            difference = s.current_min_task_count - s.desired_count
-          end
+          ths.join
 
-          if difference >= 0 && s.desired_count > s.max_task_count.max
-            difference = s.max_task_count.max - s.desired_count
-          end
+          @logger.debug "Start asg scaling of #{asg_config.name}"
 
-          if difference != 0
-            s.update_service(s.desired_count + difference)
-          end
-        end
-
-        service_configs.group_by { |s| [s.region, s.auto_scaling_group_name] }.each do |(region, auto_scaling_group_name), configs|
           total_service_count = configs.inject(0) { |sum, s| sum + s.desired_count }
-          asg_config = auto_scaling_group_configs.find { |c| c.name == auto_scaling_group_name && c.region == region }
-          asg_config.update_auto_scaling_group(total_service_count)
+          asg_config.update_auto_scaling_group(total_service_count, configs[0])
         end
-
-        TriggerConfig.clear_alarm_cache
-
-        sleep @polling_interval
       end
 
       def load_config(yaml_path)
         @config = YAML.load_file(yaml_path)
-        @polling_interval = @config["polling_interval"]
+        @polling_interval = @config["polling_interval"] || 30
       end
 
       def service_configs
@@ -84,6 +92,29 @@ module EcsDeploy
 
       def auto_scaling_group_configs
         @auto_scaling_group_configs ||= @config["auto_scaling_groups"].map(&AutoScalingConfig.method(:new))
+      end
+
+      private
+
+      def wait_polling_interval?(last_executed_at)
+        current = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
+        diff = current - last_executed_at
+        diff <= @polling_interval
+      end
+
+      def loop_with_polling_interval(name)
+        @logger.debug "Start #{name}"
+
+        last_executed_at = 0
+        loop do
+          break if @stop
+          sleep 1
+          next if wait_polling_interval?(last_executed_at)
+          yield
+          last_executed_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
+        end
+
+        @logger.debug "Stop #{name}"
       end
     end
 
@@ -132,7 +163,9 @@ module EcsDeploy
 
       def idle?
         return false unless @last_updated_at
-        (Time.now - @last_updated_at) < idle_time
+
+        diff = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second) - @last_updated_at
+        diff < idle_time
       end
 
       def current_min_task_count
@@ -147,7 +180,7 @@ module EcsDeploy
 
       def overheat?
         return false unless @reach_max_at
-        (Time.now - @reach_max_at) > cooldown_time_for_reach_max
+        (Process.clock_gettime(Process::CLOCK_MONOTONIC, :second) - @reach_max_at) > cooldown_time_for_reach_max
       end
 
       def fetch_service
@@ -168,12 +201,14 @@ module EcsDeploy
           AutoScaler.logger.info "Service \"#{name}\" is overheat, uses next max count"
         elsif current_level < next_level && !overheat? # wait cooldown
           level = current_level
-          @reach_max_at ||= Time.now
-          AutoScaler.logger.info "Service \"#{name}\" waits cooldown in #{(Time.now - @reach_max_at).to_i}sec"
+          now = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
+          @reach_max_at ||= now
+          AutoScaler.logger.info "Service \"#{name}\" waits cooldown elapsed #{(now - @reach_max_at).to_i}sec"
         elsif current_level == next_level && next_desired_count >= max_task_count[current_level] # reach current max
           level = current_level
-          @reach_max_at ||= Time.now
-          AutoScaler.logger.info "Service \"#{name}\" waits cooldown in #{(Time.now - @reach_max_at).to_i}sec"
+          now = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
+          @reach_max_at ||= now
+          AutoScaler.logger.info "Service \"#{name}\" waits cooldown elapsed #{(now - @reach_max_at).to_i}sec"
         elsif current_level == next_level && next_desired_count < max_task_count[current_level]
           level = current_level
           @reach_max_at = nil
@@ -190,12 +225,33 @@ module EcsDeploy
           service: name,
           desired_count: next_desired_count,
         )
-        @last_updated_at = Time.now
+        @last_updated_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
         self.desired_count = next_desired_count
         AutoScaler.logger.info "Update service \"#{name}\": desired_count -> #{next_desired_count}"
       rescue => e
         AutoScaler.error_logger.error(e)
         self.class.client_table[region] = nil
+      end
+
+      def fetch_container_instances
+        arns = []
+        resp = nil
+        loop do
+          options = {cluster: cluster}
+          options.merge(next_token: resp.next_token) if resp && resp.next_token
+          resp = client.list_container_instances(options)
+          arns.concat(resp.container_instance_arns)
+          break unless resp.next_token
+        end
+
+        chunk_size = 50
+        container_instances = []
+        arns.each_slice(chunk_size) do |arn_chunk|
+          is = client.describe_container_instances(cluster: cluster, container_instances: arn_chunk).container_instances
+          container_instances.concat(is)
+        end
+
+        container_instances
       end
 
       private
@@ -258,15 +314,69 @@ module EcsDeploy
         )
       end
 
-      def update_auto_scaling_group(total_service_count)
+      def instances
+        resp = client.describe_auto_scaling_groups({
+          auto_scaling_group_names: [name],
+        })
+        resp.auto_scaling_groups[0].instances
+      end
+
+      def update_auto_scaling_group(total_service_count, service_config)
         desired_capacity = total_service_count + buffer.to_i
-        client.update_auto_scaling_group(
-          auto_scaling_group_name: name,
-          min_size: desired_capacity,
-          max_size: desired_capacity,
-          desired_capacity: desired_capacity,
-        )
-        AutoScaler.logger.info "Update auto scaling group \"#{name}\": desired_capacity -> #{desired_capacity}"
+
+        current_asg = client.describe_auto_scaling_groups({
+          auto_scaling_group_names: [name],
+        }).auto_scaling_groups[0]
+
+        if current_asg.desired_capacity > desired_capacity
+          diff = current_asg.desired_capacity - desired_capacity
+          container_instances = service_config.fetch_container_instances
+          deregisterable_instances = container_instances.select do |i|
+            i.pending_tasks_count == 0 && i.running_tasks_count == 0
+          end
+
+          AutoScaler.logger.info "Fetch deregisterable instances: #{deregisterable_instances.map(&:ec2_instance_id).inspect}"
+
+          deregistered_instance_ids = []
+          deregisterable_instances.each do |i|
+            break if deregistered_instance_ids.size >= diff
+
+            begin
+              service_config.client.deregister_container_instance(cluster: service_config.cluster, container_instance: i.container_instance_arn, force: false)
+              deregistered_instance_ids << i.ec2_instance_id
+            rescue Aws::ECS::Errors::InvalidParameterException
+            end
+          end
+
+          AutoScaler.logger.info "Deregistered instances: #{deregistered_instance_ids.inspect}"
+
+          client.detach_instances(
+            auto_scaling_group_name: name,
+            instance_ids: deregistered_instance_ids,
+            should_decrement_desired_capacity: true
+          )
+
+          AutoScaler.logger.info "Detach instances from ASG #{name}: #{deregistered_instance_ids.inspect}"
+
+          sleep 3
+          ec2 = Aws::EC2::Client.new(
+            access_key_id: EcsDeploy.config.access_key_id,
+            secret_access_key: EcsDeploy.config.secret_access_key,
+            region: region
+          )
+          ec2.terminate_instances(instance_ids: deregistered_instance_ids)
+
+          AutoScaler.logger.info "Terminated instances: #{deregistered_instance_ids.inspect}"
+          AutoScaler.logger.info "Update auto scaling group \"#{name}\": desired_capacity -> #{desired_capacity}"
+        elsif current_asg.desired_capacity < desired_capacity
+          client.update_auto_scaling_group(
+            auto_scaling_group_name: name,
+            min_size: 0,
+            max_size: [current_asg.max_size, desired_capacity].max,
+            desired_capacity: desired_capacity,
+          )
+          AutoScaler.logger.info "Update auto scaling group \"#{name}\": desired_capacity -> #{desired_capacity}"
+        end
       rescue => e
         AutoScaler.error_logger.error(e)
         self.class.client_table[region] = nil
