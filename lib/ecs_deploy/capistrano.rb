@@ -27,6 +27,7 @@ namespace :ecs do
             region: r,
             task_definition_name: t[:name],
             container_definitions: t[:container_definitions],
+            task_role_arn: t[:task_role_arn],
             volumes: t[:volumes]
           )
           task_definition.register

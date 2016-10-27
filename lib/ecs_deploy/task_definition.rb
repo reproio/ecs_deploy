@@ -11,9 +11,11 @@ module EcsDeploy
 
     def initialize(
       task_definition_name:, region: nil,
-      volumes: [], container_definitions: []
+      volumes: [], container_definitions: [],
+      task_role_arn: nil
     )
       @task_definition_name = task_definition_name
+      @task_role_arn        = task_role_arn
       @region = region || EcsDeploy.config.default_region || ENV["AWS_DEFAULT_REGION"]
 
       @container_definitions = container_definitions.map do |cd|
@@ -45,6 +47,7 @@ module EcsDeploy
         family: @task_definition_name,
         container_definitions: @container_definitions,
         volumes: @volumes,
+        task_role_arn: @task_role_arn,
       })
       EcsDeploy.logger.info "register task definition [#{@task_definition_name}] [#{@region}] [#{Paint['OK', :green]}]"
     end
