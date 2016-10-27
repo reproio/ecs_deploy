@@ -78,6 +78,7 @@ module EcsDeploy
 
           total_service_count = configs.inject(0) { |sum, s| sum + s.desired_count }
           asg_config.update_auto_scaling_group(total_service_count, configs[0])
+          asg_config.detach_and_terminate_orphan_instances(configs[0])
         end
       end
 
@@ -314,11 +315,23 @@ module EcsDeploy
         )
       end
 
-      def instances
-        resp = client.describe_auto_scaling_groups({
-          auto_scaling_group_names: [name],
-        })
-        resp.auto_scaling_groups[0].instances
+      def ec2_client
+        Aws::EC2::Client.new(
+          access_key_id: EcsDeploy.config.access_key_id,
+          secret_access_key: EcsDeploy.config.secret_access_key,
+          region: region
+        )
+      end
+
+      def instances(reload: false)
+        if reload || @instances.nil?
+          resp = client.describe_auto_scaling_groups({
+            auto_scaling_group_names: [name],
+          })
+          @instances = resp.auto_scaling_groups[0].instances
+        else
+          @instances
+        end
       end
 
       def update_auto_scaling_group(total_service_count, service_config)
@@ -350,23 +363,8 @@ module EcsDeploy
 
           AutoScaler.logger.info "Deregistered instances: #{deregistered_instance_ids.inspect}"
 
-          client.detach_instances(
-            auto_scaling_group_name: name,
-            instance_ids: deregistered_instance_ids,
-            should_decrement_desired_capacity: true
-          )
+          detach_and_terminate_instances(deregistered_instance_ids)
 
-          AutoScaler.logger.info "Detach instances from ASG #{name}: #{deregistered_instance_ids.inspect}"
-
-          sleep 3
-          ec2 = Aws::EC2::Client.new(
-            access_key_id: EcsDeploy.config.access_key_id,
-            secret_access_key: EcsDeploy.config.secret_access_key,
-            region: region
-          )
-          ec2.terminate_instances(instance_ids: deregistered_instance_ids)
-
-          AutoScaler.logger.info "Terminated instances: #{deregistered_instance_ids.inspect}"
           AutoScaler.logger.info "Update auto scaling group \"#{name}\": desired_capacity -> #{desired_capacity}"
         elsif current_asg.desired_capacity < desired_capacity
           client.update_auto_scaling_group(
@@ -380,6 +378,36 @@ module EcsDeploy
       rescue => e
         AutoScaler.error_logger.error(e)
         self.class.client_table[region] = nil
+      end
+
+      def detach_and_terminate_instances(instance_ids)
+        return if instance_ids.empty?
+
+        client.detach_instances(
+          auto_scaling_group_name: name,
+          instance_ids: instance_ids,
+          should_decrement_desired_capacity: true
+        )
+
+        AutoScaler.logger.info "Detach instances from ASG #{name}: #{instance_ids.inspect}"
+        sleep 3
+
+        ec2_client.terminate_instances(instance_ids: instance_ids)
+
+        AutoScaler.logger.info "Terminated instances: #{instance_ids.inspect}"
+      end
+
+      def detach_and_terminate_orphan_instances(service_config)
+        container_instance_ids = service_config.fetch_container_instances.map(&:ec2_instance_id)
+        orphans = instances(reload: true).reject { |i| container_instance_ids.include?(i.instance_id) }.map(&:instance_id)
+
+        return if orphans.empty?
+
+        targets = ec2_client.describe_instances(instance_ids: orphans).reservations[0].instances.select do |i|
+          (Time.now - i.launch_time) > 600
+        end
+
+        detach_and_terminate_instances(targets.map(&:instance_id))
       end
     end
   end
