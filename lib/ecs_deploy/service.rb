@@ -7,17 +7,14 @@ module EcsDeploy
 
     def initialize(
       cluster:, service_name:, task_definition_name: nil, revision: nil,
-      elb_name: nil, elb_service_port: nil, elb_healthcheck_port: nil, elb_container_name: nil,
+      load_balancers: nil,
       desired_count: nil, deployment_configuration: {maximum_percent: 200, minimum_healthy_percent: 100},
       region: nil
     )
       @cluster = cluster
       @service_name = service_name
       @task_definition_name = task_definition_name || service_name
-      @elb_name = elb_name
-      @elb_service_port = elb_service_port
-      @elb_healthcheck_port = elb_healthcheck_port
-      @elb_container_name = elb_container_name
+      @load_balancers = load_balancers
       @desired_count = desired_count
       @deployment_configuration = deployment_configuration
       @revision = revision
@@ -44,16 +41,10 @@ module EcsDeploy
           service_name: @service_name,
           desired_count: @desired_count.to_i,
         })
-        if @elb_name
+        if @load_balancers
           service_options.merge!({
             role: EcsDeploy.config.ecs_service_role,
-            load_balancers: [
-              {
-                load_balancer_name: @elb_name,
-                container_name: @elb_container_name,
-                container_port: @elb_service_port,
-              }
-            ],
+            load_balancers: @load_balancers,
           })
         end
         @response = @client.create_service(service_options)
@@ -70,7 +61,6 @@ module EcsDeploy
       return if @response.nil?
 
       service = @response.service
-      deployment = nil
 
       @client.wait_until(:services_stable, cluster: @cluster, services: [service.service_name]) do |w|
         w.delay = 10

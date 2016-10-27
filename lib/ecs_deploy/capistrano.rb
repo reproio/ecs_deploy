@@ -59,10 +59,7 @@ namespace :ecs do
             cluster: service[:cluster] || fetch(:ecs_default_cluster),
             service_name: service[:name],
             task_definition_name: service[:task_definition_name],
-            elb_name: service[:elb_name],
-            elb_service_port: service[:elb_service_port],
-            elb_healthcheck_port: service[:elb_healthcheck_port],
-            elb_container_name: service[:elb_container_name],
+            load_balancers: service[:load_balancers],
             desired_count: service[:desired_count],
           }
           service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
@@ -122,10 +119,7 @@ namespace :ecs do
             cluster: service[:cluster] || fetch(:ecs_default_cluster),
             service_name: service[:name],
             task_definition_name: rollback_arn,
-            elb_name: service[:elb_name],
-            elb_service_port: service[:elb_service_port],
-            elb_healthcheck_port: service[:elb_healthcheck_port],
-            elb_container_name: service[:elb_container_name],
+            load_balancers: service[:load_balancers],
             desired_count: service[:desired_count],
           }
           service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
