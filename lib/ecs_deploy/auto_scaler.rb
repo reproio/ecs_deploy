@@ -261,7 +261,6 @@ module EcsDeploy
 
     TriggerConfig = Struct.new(:alarm_name, :region, :state, :step) do
       include ConfigBase
-      extend ConfigBase::ClassMethods
 
       def self.alarm_cache
         @alarm_cache ||= {}
@@ -306,7 +305,6 @@ module EcsDeploy
 
     AutoScalingConfig = Struct.new(:name, :region, :buffer) do
       include ConfigBase
-      extend ConfigBase::ClassMethods
 
       def client
         Thread["ecs_auto_scaler_auto_scaling_#{region}"] ||= Aws::AutoScaling::Client.new(
