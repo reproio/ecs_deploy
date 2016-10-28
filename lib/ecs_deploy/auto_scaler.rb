@@ -268,14 +268,6 @@ module EcsDeploy
     TriggerConfig = Struct.new(:alarm_name, :region, :state, :step) do
       include ConfigBase
 
-      def self.alarm_cache
-        @alarm_cache ||= {}
-      end
-
-      def self.clear_alarm_cache
-        @alarm_cache.clear if @alarm_cache
-      end
-
       def client
         Thread.current["ecs_auto_scaler_cloud_watch_#{region}"] ||= Aws::CloudWatch::Client.new(
           access_key_id: EcsDeploy.config.access_key_id,
@@ -293,15 +285,11 @@ module EcsDeploy
       end
 
       def fetch_alarm
-        alarm_cache = self.class.alarm_cache
-        return alarm_cache[region][alarm_name] if alarm_cache[region] && alarm_cache[region][alarm_name]
-
         res = client.describe_alarms(alarm_names: [alarm_name])
+
         raise "Alarm \"#{alarm_name}\" is not found" if res.metric_alarms.empty?
         res.metric_alarms[0].tap do |alarm|
           AutoScaler.logger.debug(alarm.to_json)
-          alarm_cache[region] ||= {}
-          alarm_cache[region][alarm_name] = alarm
         end
       rescue => e
         AutoScaler.error_logger.error(e)
