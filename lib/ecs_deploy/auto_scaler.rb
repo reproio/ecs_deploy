@@ -72,7 +72,7 @@ module EcsDeploy
             end
           end
 
-          ths.join
+          ths.each(&:join)
 
           @logger.debug "Start asg scaling of #{asg_config.name}"
 
