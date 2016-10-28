@@ -67,7 +67,7 @@ module EcsDeploy
               end
 
               if difference != 0
-                s.update_service(s.desired_count + difference)
+                s.update_service(difference)
               end
             end
           end
@@ -190,7 +190,8 @@ module EcsDeploy
         clear_client
       end
 
-      def update_service(next_desired_count)
+      def update_service(difference)
+        next_desired_count = desired_count + difference
         current_level = max_task_level(desired_count)
         next_level = max_task_level(next_desired_count)
         if current_level < next_level && overheat? # next max
@@ -227,7 +228,7 @@ module EcsDeploy
           w.before_wait do
             AutoScaler.logger.debug "wait service stable [#{name}]"
           end
-        end
+        end if difference < 0
         @last_updated_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
         self.desired_count = next_desired_count
         AutoScaler.logger.info "Update service \"#{name}\": desired_count -> #{next_desired_count}"
