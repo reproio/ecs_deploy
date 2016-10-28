@@ -120,12 +120,6 @@ module EcsDeploy
     end
 
     module ConfigBase
-      module ClassMethods
-        def client_table
-          @client_table ||= {}
-        end
-      end
-
       def initialize(attributes = {})
         attributes.each do |key, val|
           send("#{key}=", val)
@@ -136,7 +130,6 @@ module EcsDeploy
     SERVICE_CONFIG_ATTRIBUTES = %i(name cluster region auto_scaling_group_name step max_task_count min_task_count idle_time scheduled_min_task_count cooldown_time_for_reach_max upscale_triggers downscale_triggers desired_count)
     ServiceConfig = Struct.new(*SERVICE_CONFIG_ATTRIBUTES) do
       include ConfigBase
-      extend ConfigBase::ClassMethods
 
       def initialize(attributes = {})
         super(attributes)
@@ -155,11 +148,15 @@ module EcsDeploy
       end
 
       def client
-        self.class.client_table[region] ||= Aws::ECS::Client.new(
+        Thread.current["ecs_auto_scaler_ecs_#{region}"] ||= Aws::ECS::Client.new(
           access_key_id: EcsDeploy.config.access_key_id,
           secret_access_key: EcsDeploy.config.secret_access_key,
           region: region
         )
+      end
+
+      def clear_client
+        Thread.current["ecs_auto_scaler_ecs_#{region}"] = nil
       end
 
       def idle?
@@ -190,7 +187,7 @@ module EcsDeploy
         res.services[0]
       rescue => e
         AutoScaler.error_logger.error(e)
-        self.class.client_table[region] = nil
+        clear_client
       end
 
       def update_service(next_desired_count)
@@ -231,7 +228,7 @@ module EcsDeploy
         AutoScaler.logger.info "Update service \"#{name}\": desired_count -> #{next_desired_count}"
       rescue => e
         AutoScaler.error_logger.error(e)
-        self.class.client_table[region] = nil
+        clear_client
       end
 
       def fetch_container_instances
@@ -275,11 +272,15 @@ module EcsDeploy
       end
 
       def client
-        self.class.client_table[region] ||= Aws::CloudWatch::Client.new(
+        Thread.current["ecs_auto_scaler_cloud_watch_#{region}"] ||= Aws::CloudWatch::Client.new(
           access_key_id: EcsDeploy.config.access_key_id,
           secret_access_key: EcsDeploy.config.secret_access_key,
           region: region
         )
+      end
+
+      def clear_client
+        Thread.current["ecs_auto_scaler_cloud_watch_#{region}"] = nil
       end
 
       def match?
@@ -299,7 +300,7 @@ module EcsDeploy
         end
       rescue => e
         AutoScaler.error_logger.error(e)
-        self.class.client_table[region] = nil
+        clear_client
       end
     end
 
@@ -308,19 +309,27 @@ module EcsDeploy
       extend ConfigBase::ClassMethods
 
       def client
-        self.class.client_table[region] ||= Aws::AutoScaling::Client.new(
+        Thread["ecs_auto_scaler_auto_scaling_#{region}"] ||= Aws::AutoScaling::Client.new(
           access_key_id: EcsDeploy.config.access_key_id,
           secret_access_key: EcsDeploy.config.secret_access_key,
           region: region
         )
       end
 
+      def clear_client
+        Thread["ecs_auto_scaler_auto_scaling_#{region}"] = nil
+      end
+
       def ec2_client
-        Aws::EC2::Client.new(
+        Thread["ecs_auto_scaler_ec2_#{region}"] ||= Aws::EC2::Client.new(
           access_key_id: EcsDeploy.config.access_key_id,
           secret_access_key: EcsDeploy.config.secret_access_key,
           region: region
         )
+      end
+
+      def clear_ec2_client
+        Thread["ecs_auto_scaler_ec2_#{region}"] = nil
       end
 
       def instances(reload: false)
@@ -377,7 +386,7 @@ module EcsDeploy
         end
       rescue => e
         AutoScaler.error_logger.error(e)
-        self.class.client_table[region] = nil
+        clear_client
       end
 
       def detach_and_terminate_instances(instance_ids)
@@ -395,6 +404,10 @@ module EcsDeploy
         ec2_client.terminate_instances(instance_ids: instance_ids)
 
         AutoScaler.logger.info "Terminated instances: #{instance_ids.inspect}"
+      rescue => e
+        AutoScaler.error_logger.error(e)
+        clear_client
+        clear_ec2_client
       end
 
       def detach_and_terminate_orphan_instances(service_config)
@@ -408,6 +421,10 @@ module EcsDeploy
         end
 
         detach_and_terminate_instances(targets.map(&:instance_id))
+      rescue => e
+        AutoScaler.error_logger.error(e)
+        clear_client
+        clear_ec2_client
       end
     end
   end
