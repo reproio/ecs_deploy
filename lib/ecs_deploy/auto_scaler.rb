@@ -223,6 +223,11 @@ module EcsDeploy
           service: name,
           desired_count: next_desired_count,
         )
+        client.wait_until(:services_stable, cluster: cluster, services: [name]) do |w|
+          w.before_wait do
+            AutoScaler.logger.debug "wait service stable [#{name}]"
+          end
+        end
         @last_updated_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
         self.desired_count = next_desired_count
         AutoScaler.logger.info "Update service \"#{name}\": desired_count -> #{next_desired_count}"
