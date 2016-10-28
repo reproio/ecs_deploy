@@ -289,7 +289,7 @@ module EcsDeploy
 
         raise "Alarm \"#{alarm_name}\" is not found" if res.metric_alarms.empty?
         res.metric_alarms[0].tap do |alarm|
-          AutoScaler.logger.debug(alarm.to_json)
+          AutoScaler.logger.debug("#{alarm.alarm_name} state is #{alarm.state_value}")
         end
       rescue => e
         AutoScaler.error_logger.error(e)
