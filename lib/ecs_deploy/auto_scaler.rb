@@ -307,7 +307,7 @@ module EcsDeploy
       include ConfigBase
 
       def client
-        Thread["ecs_auto_scaler_auto_scaling_#{region}"] ||= Aws::AutoScaling::Client.new(
+        Thread.current["ecs_auto_scaler_auto_scaling_#{region}"] ||= Aws::AutoScaling::Client.new(
           access_key_id: EcsDeploy.config.access_key_id,
           secret_access_key: EcsDeploy.config.secret_access_key,
           region: region
@@ -315,11 +315,11 @@ module EcsDeploy
       end
 
       def clear_client
-        Thread["ecs_auto_scaler_auto_scaling_#{region}"] = nil
+        Thread.current["ecs_auto_scaler_auto_scaling_#{region}"] = nil
       end
 
       def ec2_client
-        Thread["ecs_auto_scaler_ec2_#{region}"] ||= Aws::EC2::Client.new(
+        Thread.current["ecs_auto_scaler_ec2_#{region}"] ||= Aws::EC2::Client.new(
           access_key_id: EcsDeploy.config.access_key_id,
           secret_access_key: EcsDeploy.config.secret_access_key,
           region: region
@@ -327,7 +327,7 @@ module EcsDeploy
       end
 
       def clear_ec2_client
-        Thread["ecs_auto_scaler_ec2_#{region}"] = nil
+        Thread.current["ecs_auto_scaler_ec2_#{region}"] = nil
       end
 
       def instances(reload: false)
