@@ -116,7 +116,7 @@ module EcsDeploy
           next if wait_polling_interval?(last_executed_at)
           yield
           last_executed_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
-          @logger.debug "#{nane} is last executed at #{last_executed_at}"
+          @logger.debug "#{name} is last executed at #{last_executed_at}"
         end
 
         @logger.debug "Stop #{name}"
