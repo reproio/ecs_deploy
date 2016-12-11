@@ -23,7 +23,7 @@ module EcsDeploy
         config_groups = service_configs.group_by { |s| [s.region, s.auto_scaling_group_name] }
         ths = config_groups.map do |(region, auto_scaling_group_name), configs|
           asg_config = auto_scaling_group_configs.find { |c| c.name == auto_scaling_group_name && c.region == region }
-          Thread.new(asg_config, configs, &method(:main_loop))
+          Thread.new(asg_config, configs, &method(:main_loop)).tap { |th| th.abort_on_exception = true }
         end
 
         ths.each(&:join)
@@ -33,9 +33,12 @@ module EcsDeploy
         loop_with_polling_interval("loop of #{asg_config.name}") do
           ths = configs.map do |service_config|
             Thread.new(service_config) do |s|
-              next if s.idle?
-
               @logger.debug "Start service scaling of #{s.name}"
+
+              if s.idle?
+                @logger.debug "#{s.name} is idling"
+                next
+              end
 
               difference = 0
               s.upscale_triggers.each do |trigger|
@@ -113,6 +116,7 @@ module EcsDeploy
           next if wait_polling_interval?(last_executed_at)
           yield
           last_executed_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
+          @logger.debug "#{nane} is last executed at #{last_executed_at}"
         end
 
         @logger.debug "Stop #{name}"
@@ -148,15 +152,11 @@ module EcsDeploy
       end
 
       def client
-        Thread.current["ecs_auto_scaler_ecs_#{region}"] ||= Aws::ECS::Client.new(
+        Aws::ECS::Client.new(
           access_key_id: EcsDeploy.config.access_key_id,
           secret_access_key: EcsDeploy.config.secret_access_key,
           region: region
         )
-      end
-
-      def clear_client
-        Thread.current["ecs_auto_scaler_ecs_#{region}"] = nil
       end
 
       def idle?
@@ -187,7 +187,6 @@ module EcsDeploy
         res.services[0]
       rescue => e
         AutoScaler.error_logger.error(e)
-        clear_client
       end
 
       def update_service(difference)
@@ -218,13 +217,14 @@ module EcsDeploy
           AutoScaler.logger.info "Service \"#{name}\" clears cooldown state"
         end
 
+        cl = client
         next_desired_count = [next_desired_count, max_task_count[level]].min
-        client.update_service(
+        cl.update_service(
           cluster: cluster,
           service: name,
           desired_count: next_desired_count,
         )
-        client.wait_until(:services_stable, cluster: cluster, services: [name]) do |w|
+        cl.wait_until(:services_stable, cluster: cluster, services: [name]) do |w|
           w.before_wait do
             AutoScaler.logger.debug "wait service stable [#{name}]"
           end
@@ -234,16 +234,16 @@ module EcsDeploy
         AutoScaler.logger.info "Update service \"#{name}\": desired_count -> #{next_desired_count}"
       rescue => e
         AutoScaler.error_logger.error(e)
-        clear_client
       end
 
       def fetch_container_instances
         arns = []
         resp = nil
+        cl = client
         loop do
           options = {cluster: cluster}
           options.merge(next_token: resp.next_token) if resp && resp.next_token
-          resp = client.list_container_instances(options)
+          resp = cl.list_container_instances(options)
           arns.concat(resp.container_instance_arns)
           break unless resp.next_token
         end
@@ -251,7 +251,7 @@ module EcsDeploy
         chunk_size = 50
         container_instances = []
         arns.each_slice(chunk_size) do |arn_chunk|
-          is = client.describe_container_instances(cluster: cluster, container_instances: arn_chunk).container_instances
+          is = cl.describe_container_instances(cluster: cluster, container_instances: arn_chunk).container_instances
           container_instances.concat(is)
         end
 
@@ -269,15 +269,11 @@ module EcsDeploy
       include ConfigBase
 
       def client
-        Thread.current["ecs_auto_scaler_cloud_watch_#{region}"] ||= Aws::CloudWatch::Client.new(
+        Aws::CloudWatch::Client.new(
           access_key_id: EcsDeploy.config.access_key_id,
           secret_access_key: EcsDeploy.config.secret_access_key,
           region: region
         )
-      end
-
-      def clear_client
-        Thread.current["ecs_auto_scaler_cloud_watch_#{region}"] = nil
       end
 
       def match?
@@ -301,27 +297,19 @@ module EcsDeploy
       include ConfigBase
 
       def client
-        Thread.current["ecs_auto_scaler_auto_scaling_#{region}"] ||= Aws::AutoScaling::Client.new(
+        Aws::AutoScaling::Client.new(
           access_key_id: EcsDeploy.config.access_key_id,
           secret_access_key: EcsDeploy.config.secret_access_key,
           region: region
         )
-      end
-
-      def clear_client
-        Thread.current["ecs_auto_scaler_auto_scaling_#{region}"] = nil
       end
 
       def ec2_client
-        Thread.current["ecs_auto_scaler_ec2_#{region}"] ||= Aws::EC2::Client.new(
+        Aws::EC2::Client.new(
           access_key_id: EcsDeploy.config.access_key_id,
           secret_access_key: EcsDeploy.config.secret_access_key,
           region: region
         )
-      end
-
-      def clear_ec2_client
-        Thread.current["ecs_auto_scaler_ec2_#{region}"] = nil
       end
 
       def instances(reload: false)
@@ -378,7 +366,6 @@ module EcsDeploy
         end
       rescue => e
         AutoScaler.error_logger.error(e)
-        clear_client
       end
 
       def detach_and_terminate_instances(instance_ids)
@@ -398,8 +385,6 @@ module EcsDeploy
         AutoScaler.logger.info "Terminated instances: #{instance_ids.inspect}"
       rescue => e
         AutoScaler.error_logger.error(e)
-        clear_client
-        clear_ec2_client
       end
 
       def detach_and_terminate_orphan_instances(service_config)
@@ -415,8 +400,6 @@ module EcsDeploy
         detach_and_terminate_instances(targets.map(&:instance_id))
       rescue => e
         AutoScaler.error_logger.error(e)
-        clear_client
-        clear_ec2_client
       end
     end
   end
