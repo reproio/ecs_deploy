@@ -74,6 +74,7 @@ module EcsDeploy
               end
             end
           end
+          ths.each { |th| th.abort_on_exception = true }
 
           ths.each(&:join)
 
