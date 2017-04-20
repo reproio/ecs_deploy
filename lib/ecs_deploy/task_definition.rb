@@ -11,7 +11,7 @@ module EcsDeploy
 
     def initialize(
       task_definition_name:, region: nil,
-      volumes: [], container_definitions: [],
+      network_mode: "bridge", volumes: [], container_definitions: [], placement_constraints: [],
       task_role_arn: nil
     )
       @task_definition_name = task_definition_name
@@ -28,6 +28,8 @@ module EcsDeploy
         cd
       end
       @volumes = volumes
+      @network_mode = network_mode
+      @placement_constraints = placement_constraints
 
       @client = Aws::ECS::Client.new(region: @region)
     end
@@ -45,8 +47,10 @@ module EcsDeploy
     def register
       @client.register_task_definition({
         family: @task_definition_name,
+        network_mode: @network_mode,
         container_definitions: @container_definitions,
         volumes: @volumes,
+        placement_constraints: @placement_constraints,
         task_role_arn: @task_role_arn,
       })
       EcsDeploy.logger.info "register task definition [#{@task_definition_name}] [#{@region}] [#{Paint['OK', :green]}]"
