@@ -76,7 +76,7 @@ module EcsDeploy
     def self.wait_all_running(services)
       services.group_by { |s| [s.cluster, s.region] }.each do |(cl, region), ss|
         client = Aws::ECS::Client.new(region: region)
-        ss.map(&:service_name).each_cons(MAX_DESCRIBE_SERVICES) do |chunked_service_names|
+        ss.map(&:service_name).each_slice(MAX_DESCRIBE_SERVICES) do |chunked_service_names|
           client.wait_until(:services_stable, cluster: cl, services: chunked_service_names) do |w|
             w.before_attempt do
               EcsDeploy.logger.info "wait service stable [#{chunked_service_names.join(", ")}]"
