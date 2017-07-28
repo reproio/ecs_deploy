@@ -43,6 +43,31 @@ namespace :ecs do
     end
   end
 
+  task deploy_scheduled_task: [:configure, :register_task_definition] do
+    if fetch(:ecs_tasks)
+      regions = Array(fetch(:ecs_region))
+      regions = [nil] if regions.empty?
+      regions.each do |r|
+        fetch(:ecs_scheduled_tasks).each do |t|
+          scheduled_task = EcsDeploy::ScheduledTask.new(
+            region: r,
+            cluster: t[:cluster],
+            rule_name: t[:rule_name],
+            schedule_expression: t[:schedule_expression],
+            enabled: t[:enabled] != false,
+            description: t[:description],
+            target_id: t[:target_id],
+            task_definition_name: t[:task_definition_name],
+            revision: t[:revision],
+            task_count: t[:task_count],
+            role_arn: t[:role_arn],
+          )
+          scheduled_task.deploy
+        end
+      end
+    end
+  end
+
   task deploy: [:configure, :register_task_definition] do
     if fetch(:ecs_services)
       regions = Array(fetch(:ecs_region))
