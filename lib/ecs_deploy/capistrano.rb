@@ -20,11 +20,13 @@ namespace :ecs do
   task register_task_definition: [:configure] do
     if fetch(:ecs_tasks)
       regions = Array(fetch(:ecs_region))
-      regions = [nil] if regions.empty?
+      regions = [EcsDeploy.config.default_region || ENV["AWS_DEFAULT_REGION"]] if regions.empty?
+      ecs_registered_tasks = {}
       regions.each do |r|
+        ecs_registered_tasks[region] = {}
         fetch(:ecs_tasks).each do |t|
           task_definition = EcsDeploy::TaskDefinition.new(
-            region: r,
+            region: region,
             task_definition_name: t[:name],
             container_definitions: t[:container_definitions],
             task_role_arn: t[:task_role_arn],
@@ -32,14 +34,21 @@ namespace :ecs do
             network_mode: t[:network_mode],
             placement_constraints: t[:placement_constraints],
           )
-          task_definition.register
+          result = task_definition.register
+          ecs_registered_tasks[region][t[:name]] = result
 
-          t[:executions].to_a.each do |exec|
+          executions = t[:executions].to_a
+          unless executions.empty?
+            warn "`executions` config is deprecated. I will remove this in near future"
+          end
+          executions.each do |exec|
             exec[:cluster] ||= fetch(:ecs_default_cluster)
             task_definition.run(exec)
           end
         end
       end
+
+      set :ecs_registered_tasks, ecs_registered_tasks
     end
   end
 

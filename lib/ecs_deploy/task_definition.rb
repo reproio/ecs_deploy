@@ -45,7 +45,7 @@ module EcsDeploy
     end
 
     def register
-      @client.register_task_definition({
+      res = @client.register_task_definition({
         family: @task_definition_name,
         network_mode: @network_mode,
         container_definitions: @container_definitions,
@@ -54,6 +54,7 @@ module EcsDeploy
         task_role_arn: @task_role_arn,
       })
       EcsDeploy.logger.info "register task definition [#{@task_definition_name}] [#{@region}] [#{Paint['OK', :green]}]"
+      res.task_definition
     end
 
     def run(info)
