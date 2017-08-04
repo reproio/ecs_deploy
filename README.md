@@ -87,9 +87,6 @@ set :ecs_tasks, [
       }
     ],
     volumes: [{name: "sockets_path", host: {}}],
-    executions: [ # execution task on deploy timing
-      {container_overrides: [{name: "myapp", command: ["db_migrate"]}]},
-    ]
   },
 ]
 

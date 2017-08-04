@@ -36,15 +36,6 @@ namespace :ecs do
           )
           result = task_definition.register
           ecs_registered_tasks[region][t[:name]] = result
-
-          executions = t[:executions].to_a
-          unless executions.empty?
-            warn "`executions` config is deprecated. I will remove this in near future"
-          end
-          executions.each do |exec|
-            exec[:cluster] ||= fetch(:ecs_default_cluster)
-            task_definition.run(exec)
-          end
         end
       end
 
