@@ -22,7 +22,7 @@ namespace :ecs do
       regions = Array(fetch(:ecs_region))
       regions = [EcsDeploy.config.default_region || ENV["AWS_DEFAULT_REGION"]] if regions.empty?
       ecs_registered_tasks = {}
-      regions.each do |r|
+      regions.each do |region|
         ecs_registered_tasks[region] = {}
         fetch(:ecs_tasks).each do |t|
           task_definition = EcsDeploy::TaskDefinition.new(
