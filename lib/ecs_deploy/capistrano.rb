@@ -51,7 +51,7 @@ namespace :ecs do
         fetch(:ecs_scheduled_tasks).each do |t|
           scheduled_task = EcsDeploy::ScheduledTask.new(
             region: r,
-            cluster: t[:cluster],
+            cluster: t[:cluster] || fetch(:ecs_default_cluster),
             rule_name: t[:rule_name],
             schedule_expression: t[:schedule_expression],
             enabled: t[:enabled] != false,
