@@ -61,6 +61,7 @@ namespace :ecs do
             revision: t[:revision],
             task_count: t[:task_count],
             role_arn: t[:role_arn],
+            container_overrides: t[:container_overrides],
           )
           scheduled_task.deploy
         end

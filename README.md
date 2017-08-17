@@ -101,6 +101,10 @@ set :ecs_scheduled_tasks, [
     task_count: 2, # Default 1
     revision: 12, # Optional
     role_arn: "TaskRoleArn", # Optional
+    container_overrides: [ # Optional
+      name: "myapp-main",
+      command: ["ls"],
+    ]
   }
 ]
 
