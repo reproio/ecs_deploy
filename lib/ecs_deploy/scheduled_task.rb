@@ -9,7 +9,7 @@ module EcsDeploy
     def initialize(
       cluster:, rule_name:, schedule_expression:, enabled: true, description: nil, target_id: nil,
       task_definition_name:, revision: nil, task_count: nil, role_arn:,
-      region: nil
+      region: nil, container_overrides: nil
     )
       @cluster = cluster
       @rule_name = rule_name
@@ -22,6 +22,7 @@ module EcsDeploy
       @revision = revision
       @role_arn = role_arn
       @region = region || EcsDeploy.config.default_region || ENV["AWS_DEFAULT_REGION"]
+      @container_overrides = container_overrides
 
       @client = Aws::ECS::Client.new(region: @region)
       @cloud_watch_events = Aws::CloudWatchEvents::Client.new(region: @region)
@@ -58,19 +59,22 @@ module EcsDeploy
     end
 
     def put_targets
+      target = {
+        id: @target_id,
+        arn: cluster_arn,
+        role_arn: @role_arn,
+        ecs_parameters: {
+          task_definition_arn: task_definition_arn,
+          task_count: @task_count,
+        },
+      }
+      if @container_overrides
+        target.merge!(input: { containerOverrides: @container_overrides }.to_json)
+      end
+
       res = @cloud_watch_events.put_targets(
         rule: @rule_name,
-        targets: [
-          {
-            id: @target_id,
-            arn: cluster_arn,
-            role_arn: @role_arn,
-            ecs_parameters: {
-              task_definition_arn: task_definition_arn,
-              task_count: @task_count,
-            },
-          }
-        ]
+        targets: [target]
       )
       if res.failed_entry_count.zero?
         EcsDeploy.logger.info "create cloudwatch event target [#{@target_id}] [#{@region}] [#{Paint['OK', :green]}]"
