@@ -44,7 +44,7 @@ namespace :ecs do
   end
 
   task deploy_scheduled_task: [:configure, :register_task_definition] do
-    if fetch(:ecs_tasks)
+    if fetch(:ecs_scheduled_tasks)
       regions = Array(fetch(:ecs_region))
       regions = [nil] if regions.empty?
       regions.each do |r|
