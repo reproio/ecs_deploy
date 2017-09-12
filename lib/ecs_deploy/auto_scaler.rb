@@ -290,7 +290,6 @@ module EcsDeploy
         end
       rescue => e
         AutoScaler.error_logger.error(e)
-        clear_client
       end
     end
 
