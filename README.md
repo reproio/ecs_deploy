@@ -28,8 +28,6 @@ require 'ecs_deploy/capistrano'
 
 # deploy.rb
 set :ecs_default_cluster, "ecs-cluster-name"
-set :ecs_access_key_id, "dummy" # optional, if nil, use environment variable
-set :ecs_secret_access_key, "dummy" # optional, if nil, use environment variable
 set :ecs_region, %w(ap-northeast-1) # optional, if nil, use environment variable
 set :ecs_service_role, "customEcsServiceRole" # default: ecsServiceRole
 set :ecs_deploy_wait_timeout, 600 # default: 300
