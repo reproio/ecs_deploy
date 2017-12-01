@@ -20,10 +20,12 @@ module EcsDeploy
       @desired_count = desired_count
       @deployment_configuration = deployment_configuration
       @revision = revision
-      @region = region || EcsDeploy.config.default_region || ENV["AWS_DEFAULT_REGION"]
+      @region = region || EcsDeploy.config.default_region
+      options = {}
+      options[:region] = @region if @region
       @response = nil
 
-      @client = Aws::ECS::Client.new(region: @region)
+      @client = Aws::ECS::Client.new(options)
     end
 
     def current_task_definition_arn

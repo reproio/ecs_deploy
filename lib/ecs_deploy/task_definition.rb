@@ -16,8 +16,9 @@ module EcsDeploy
     )
       @task_definition_name = task_definition_name
       @task_role_arn        = task_role_arn
-      @region = region || EcsDeploy.config.default_region || ENV["AWS_DEFAULT_REGION"]
-
+      @region = region || EcsDeploy.config.default_region
+      options = {}
+      options[:region] = @region if @region
       @container_definitions = container_definitions.map do |cd|
         if cd[:docker_labels]
           cd[:docker_labels] = cd[:docker_labels].map { |k, v| [k.to_s, v] }.to_h
@@ -31,7 +32,7 @@ module EcsDeploy
       @network_mode = network_mode
       @placement_constraints = placement_constraints
 
-      @client = Aws::ECS::Client.new(region: @region)
+      @client = Aws::ECS::Client.new(options)
     end
 
     def recent_task_definition_arns
