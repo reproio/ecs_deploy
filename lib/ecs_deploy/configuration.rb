@@ -6,7 +6,9 @@ module EcsDeploy
       :secret_access_key,
       :default_region,
       :deploy_wait_timeout,
-      :ecs_service_role
+      :ecs_service_role,
+      :ecs_service_wait_until_max_attempts,
+      :ecs_service_wait_until_delay
 
     def initialize
       @log_level = :info

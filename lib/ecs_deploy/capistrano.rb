@@ -7,6 +7,8 @@ namespace :ecs do
       c.deploy_wait_timeout = fetch(:ecs_deploy_wait_timeout) if fetch(:ecs_deploy_wait_timeout)
       c.ecs_service_role = fetch(:ecs_service_role) if fetch(:ecs_service_role)
       c.default_region = Array(fetch(:ecs_region))[0] if fetch(:ecs_region)
+      c.ecs_service_wait_until_max_attempts = fetch(:ecs_service_wait_until_max_attempts) if fetch(:ecs_service_wait_until_max_attempts)
+      c.ecs_service_wait_until_delay = fetch(:ecs_service_wait_until_delay) if fetch(:ecs_service_wait_until_delay)
     end
 
     if ENV["TARGET_CLUSTER"]

@@ -65,7 +65,8 @@ module EcsDeploy
       service = @response.service
 
       @client.wait_until(:services_stable, cluster: @cluster, services: [service.service_name]) do |w|
-        w.delay = 10
+        w.delay = EcsDeploy.config.ecs_service_wait_until_delay if EcsDeploy.config.ecs_service_wait_until_delay
+        w.max_attempts = EcsDeploy.config.ecs_service_wait_until_max_attempts if EcsDeploy.config.ecs_service_wait_until_max_attempts
 
         w.before_attempt do
           EcsDeploy.logger.info "wait service stable [#{service.service_name}]"
@@ -78,6 +79,9 @@ module EcsDeploy
         client = Aws::ECS::Client.new(region: region)
         ss.map(&:service_name).each_slice(MAX_DESCRIBE_SERVICES) do |chunked_service_names|
           client.wait_until(:services_stable, cluster: cl, services: chunked_service_names) do |w|
+            w.delay = EcsDeploy.config.ecs_service_wait_until_delay if EcsDeploy.config.ecs_service_wait_until_delay
+            w.max_attempts = EcsDeploy.config.ecs_service_wait_until_max_attempts if EcsDeploy.config.ecs_service_wait_until_max_attempts
+
             w.before_attempt do
               EcsDeploy.logger.info "wait service stable [#{chunked_service_names.join(", ")}]"
             end

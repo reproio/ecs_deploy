@@ -31,6 +31,8 @@ set :ecs_default_cluster, "ecs-cluster-name"
 set :ecs_region, %w(ap-northeast-1) # optional, if nil, use environment variable
 set :ecs_service_role, "customEcsServiceRole" # default: ecsServiceRole
 set :ecs_deploy_wait_timeout, 600 # default: 300
+set :ecs_service_wait_until_max_attempts, 40 # optional
+set :ecs_service_wait_until_delay, 15 # optional
 
 set :ecs_tasks, [
   {
