@@ -7,8 +7,8 @@ module EcsDeploy
       :default_region,
       :deploy_wait_timeout,
       :ecs_service_role,
-      :ecs_service_wait_until_max_attempts,
-      :ecs_service_wait_until_delay
+      :ecs_wait_until_services_stable_max_attempts,
+      :ecs_wait_until_services_stable_delay
 
     def initialize
       @log_level = :info
