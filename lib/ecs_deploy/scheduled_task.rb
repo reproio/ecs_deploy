@@ -21,10 +21,11 @@ module EcsDeploy
       @task_count = task_count || 1
       @revision = revision
       @role_arn = role_arn
-      @region = region || EcsDeploy.config.default_region || ENV["AWS_DEFAULT_REGION"]
+      region ||= EcsDeploy.config.default_region
       @container_overrides = container_overrides
 
-      @client = Aws::ECS::Client.new(region: @region)
+      @client = region ? Aws::ECS::Client.new(region: region) : Aws::ECS::Client.new
+      @region = @client.config.region
       @cloud_watch_events = Aws::CloudWatchEvents::Client.new(region: @region)
     end
 
