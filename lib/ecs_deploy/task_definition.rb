@@ -1,12 +1,12 @@
 module EcsDeploy
   class TaskDefinition
     def self.deregister(arn, region: nil)
-      region = region || EcsDeploy.config.default_region || ENV["AWS_DEFAULT_REGION"]
-      client = Aws::ECS::Client.new(region: region)
+      region ||= EcsDeploy.config.default_region
+      client = region ? Aws::ECS::Client.new(region: region) : Aws::ECS::Client.new
       client.deregister_task_definition({
         task_definition: arn,
       })
-      EcsDeploy.logger.info "deregister task definition [#{arn}] [#{region}] [#{Paint['OK', :green]}]"
+      EcsDeploy.logger.info "deregister task definition [#{arn}] [#{client.config.region}] [#{Paint['OK', :green]}]"
     end
 
     def initialize(
@@ -16,7 +16,7 @@ module EcsDeploy
     )
       @task_definition_name = task_definition_name
       @task_role_arn        = task_role_arn
-      @region = region || EcsDeploy.config.default_region || ENV["AWS_DEFAULT_REGION"]
+      region ||= EcsDeploy.config.default_region
 
       @container_definitions = container_definitions.map do |cd|
         if cd[:docker_labels]
@@ -31,7 +31,8 @@ module EcsDeploy
       @network_mode = network_mode
       @placement_constraints = placement_constraints
 
-      @client = Aws::ECS::Client.new(region: @region)
+      @client = region ? Aws::ECS::Client.new(region: region) : Aws::ECS::Client.new
+      @region = @client.config.region
     end
 
     def recent_task_definition_arns
