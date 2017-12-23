@@ -94,8 +94,13 @@ namespace :ecs do
             task_definition_name: service[:task_definition_name],
             load_balancers: service[:load_balancers],
             desired_count: service[:desired_count],
+            health_check_grace_period_seconds: service[:health_check_grace_period_seconds],
+            delete: service[:delete],
           }
           service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
+          service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
+          service_options[:placement_constraints] = service[:placement_constraints] if service[:placement_constraints]
+          service_options[:placement_strategy] = service[:placement_strategy] if service[:placement_strategy]
           s = EcsDeploy::Service.new(service_options)
           s.deploy
           s
@@ -154,8 +159,11 @@ namespace :ecs do
             task_definition_name: rollback_arn,
             load_balancers: service[:load_balancers],
             desired_count: service[:desired_count],
+            health_check_grace_period_seconds: service[:health_check_grace_period_seconds],
           }
           service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
+          service_options[:placement_constraints] = service[:placement_constraints] if service[:placement_constraints]
+          service_options[:placement_strategy] = service[:placement_strategy] if service[:placement_strategy]
           s = EcsDeploy::Service.new(service_options)
           s.deploy
           EcsDeploy::TaskDefinition.deregister(current_task_definition_arn, region: r)

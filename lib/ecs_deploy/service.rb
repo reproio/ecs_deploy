@@ -5,13 +5,18 @@ module EcsDeploy
     CHECK_INTERVAL = 5
     MAX_DESCRIBE_SERVICES = 10
 
-    attr_reader :cluster, :region, :service_name
+    attr_reader :cluster, :region, :service_name, :delete
 
     def initialize(
       cluster:, service_name:, task_definition_name: nil, revision: nil,
       load_balancers: nil,
       desired_count: nil, deployment_configuration: {maximum_percent: 200, minimum_healthy_percent: 100},
-      region: nil
+      placement_constraints: [],
+      placement_strategy: [],
+      network_configuration: nil,
+      health_check_grace_period_seconds: nil,
+      region: nil,
+      delete: false
     )
       @cluster = cluster
       @service_name = service_name
@@ -19,12 +24,18 @@ module EcsDeploy
       @load_balancers = load_balancers
       @desired_count = desired_count
       @deployment_configuration = deployment_configuration
+      @placement_constraints = placement_constraints
+      @placement_strategy = placement_strategy
+      @network_configuration = network_configuration
+      @health_check_grace_period_seconds = health_check_grace_period_seconds
       @revision = revision
       region ||= EcsDeploy.config.default_region
       @response = nil
 
       @client = region ? Aws::ECS::Client.new(region: region) : Aws::ECS::Client.new
       @region = @client.config.region
+
+      @delete = delete
     end
 
     def current_task_definition_arn
@@ -38,11 +49,17 @@ module EcsDeploy
         cluster: @cluster,
         task_definition: task_definition_name_with_revision,
         deployment_configuration: @deployment_configuration,
+        network_configuration: @network_configuration,
+        health_check_grace_period_seconds: @health_check_grace_period_seconds,
       }
       if res.services.select{ |s| s.status == 'ACTIVE' }.empty?
+        return if @delete
+
         service_options.merge!({
           service_name: @service_name,
           desired_count: @desired_count.to_i,
+          placement_constraints: @placement_constraints,
+          placement_strategy: @placement_strategy,
         })
         if @load_balancers
           service_options.merge!({
@@ -53,11 +70,20 @@ module EcsDeploy
         @response = @client.create_service(service_options)
         EcsDeploy.logger.info "create service [#{@service_name}] [#{@region}] [#{Paint['OK', :green]}]"
       else
+        return delete_service if @delete
+
         service_options.merge!({service: @service_name})
         service_options.merge!({desired_count: @desired_count}) if @desired_count
         @response = @client.update_service(service_options)
         EcsDeploy.logger.info "update service [#{@service_name}] [#{@region}] [#{Paint['OK', :green]}]"
       end
+    end
+
+    def delete_service
+      @client.update_service(cluster: @cluster, service: @service_name, desired_count: 0)
+      sleep 1
+      @client.delete_service(cluster: @cluster, service: @service_name)
+      EcsDeploy.logger.info "delete service [#{@service_name}] [#{@region}] [#{Paint['OK', :green]}]"
     end
 
     def wait_running
@@ -78,7 +104,7 @@ module EcsDeploy
     def self.wait_all_running(services)
       services.group_by { |s| [s.cluster, s.region] }.each do |(cl, region), ss|
         client = Aws::ECS::Client.new(region: region)
-        ss.map(&:service_name).each_slice(MAX_DESCRIBE_SERVICES) do |chunked_service_names|
+        ss.reject(&:delete).map(&:service_name).each_slice(MAX_DESCRIBE_SERVICES) do |chunked_service_names|
           client.wait_until(:services_stable, cluster: cl, services: chunked_service_names) do |w|
             w.delay = EcsDeploy.config.ecs_wait_until_services_stable_delay if EcsDeploy.config.ecs_wait_until_services_stable_delay
             w.max_attempts = EcsDeploy.config.ecs_wait_until_services_stable_max_attempts if EcsDeploy.config.ecs_wait_until_services_stable_max_attempts
