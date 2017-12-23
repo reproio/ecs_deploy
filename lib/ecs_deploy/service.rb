@@ -11,6 +11,7 @@ module EcsDeploy
       cluster:, service_name:, task_definition_name: nil, revision: nil,
       load_balancers: nil,
       desired_count: nil, deployment_configuration: {maximum_percent: 200, minimum_healthy_percent: 100},
+      launch_type: nil,
       placement_constraints: [],
       placement_strategy: [],
       network_configuration: nil,
@@ -24,6 +25,7 @@ module EcsDeploy
       @load_balancers = load_balancers
       @desired_count = desired_count
       @deployment_configuration = deployment_configuration
+      @launch_type = launch_type
       @placement_constraints = placement_constraints
       @placement_strategy = placement_strategy
       @network_configuration = network_configuration
@@ -58,6 +60,7 @@ module EcsDeploy
         service_options.merge!({
           service_name: @service_name,
           desired_count: @desired_count.to_i,
+          launch_type: @launch_type,
           placement_constraints: @placement_constraints,
           placement_strategy: @placement_strategy,
         })

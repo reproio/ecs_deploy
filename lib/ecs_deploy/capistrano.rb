@@ -94,6 +94,7 @@ namespace :ecs do
             task_definition_name: service[:task_definition_name],
             load_balancers: service[:load_balancers],
             desired_count: service[:desired_count],
+            launch_type: service[:launch_type],
             health_check_grace_period_seconds: service[:health_check_grace_period_seconds],
             delete: service[:delete],
           }
@@ -159,6 +160,7 @@ namespace :ecs do
             task_definition_name: rollback_arn,
             load_balancers: service[:load_balancers],
             desired_count: service[:desired_count],
+            launch_type: service[:launch_type],
             health_check_grace_period_seconds: service[:health_check_grace_period_seconds],
           }
           service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
