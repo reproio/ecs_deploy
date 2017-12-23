@@ -35,6 +35,9 @@ namespace :ecs do
             volumes: t[:volumes],
             network_mode: t[:network_mode],
             placement_constraints: t[:placement_constraints],
+            requires_compatibilities: t[:requires_compatibilities],
+            cpu: t[:cpu],
+            memory: t[:memory],
           )
           result = task_definition.register
           ecs_registered_tasks[region][t[:name]] = result
