@@ -35,6 +35,9 @@ namespace :ecs do
             volumes: t[:volumes],
             network_mode: t[:network_mode],
             placement_constraints: t[:placement_constraints],
+            requires_compatibilities: t[:requires_compatibilities],
+            cpu: t[:cpu],
+            memory: t[:memory],
           )
           result = task_definition.register
           ecs_registered_tasks[region][t[:name]] = result
@@ -91,8 +94,14 @@ namespace :ecs do
             task_definition_name: service[:task_definition_name],
             load_balancers: service[:load_balancers],
             desired_count: service[:desired_count],
+            launch_type: service[:launch_type],
+            network_configuration: service[:network_configuration],
+            health_check_grace_period_seconds: service[:health_check_grace_period_seconds],
+            delete: service[:delete],
           }
           service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
+          service_options[:placement_constraints] = service[:placement_constraints] if service[:placement_constraints]
+          service_options[:placement_strategy] = service[:placement_strategy] if service[:placement_strategy]
           s = EcsDeploy::Service.new(service_options)
           s.deploy
           s
@@ -151,8 +160,13 @@ namespace :ecs do
             task_definition_name: rollback_arn,
             load_balancers: service[:load_balancers],
             desired_count: service[:desired_count],
+            launch_type: service[:launch_type],
+            network_configuration: service[:network_configuration],
+            health_check_grace_period_seconds: service[:health_check_grace_period_seconds],
           }
           service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
+          service_options[:placement_constraints] = service[:placement_constraints] if service[:placement_constraints]
+          service_options[:placement_strategy] = service[:placement_strategy] if service[:placement_strategy]
           s = EcsDeploy::Service.new(service_options)
           s.deploy
           EcsDeploy::TaskDefinition.deregister(current_task_definition_arn, region: r)
