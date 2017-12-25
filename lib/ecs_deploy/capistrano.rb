@@ -95,10 +95,10 @@ namespace :ecs do
             load_balancers: service[:load_balancers],
             desired_count: service[:desired_count],
             launch_type: service[:launch_type],
+            network_configuration: service[:network_configuration],
             health_check_grace_period_seconds: service[:health_check_grace_period_seconds],
             delete: service[:delete],
           }
-          service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
           service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
           service_options[:placement_constraints] = service[:placement_constraints] if service[:placement_constraints]
           service_options[:placement_strategy] = service[:placement_strategy] if service[:placement_strategy]
@@ -161,6 +161,7 @@ namespace :ecs do
             load_balancers: service[:load_balancers],
             desired_count: service[:desired_count],
             launch_type: service[:launch_type],
+            network_configuration: service[:network_configuration],
             health_check_grace_period_seconds: service[:health_check_grace_period_seconds],
           }
           service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
