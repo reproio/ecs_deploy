@@ -334,7 +334,7 @@ module EcsDeploy
           diff = current_asg.desired_capacity - desired_capacity
           container_instances = service_config.fetch_container_instances
           deregisterable_instances = container_instances.select do |i|
-            i.pending_tasks_count == 0 && i.running_tasks_count == 0
+            i.pending_tasks_count == 0 && !running_essential_task?(i, service_config)
           end
 
           AutoScaler.logger.info "Fetch deregisterable instances: #{deregisterable_instances.map(&:ec2_instance_id).inspect}"
@@ -342,9 +342,8 @@ module EcsDeploy
           deregistered_instance_ids = []
           deregisterable_instances.each do |i|
             break if deregistered_instance_ids.size >= diff
-
             begin
-              service_config.client.deregister_container_instance(cluster: service_config.cluster, container_instance: i.container_instance_arn, force: false)
+              service_config.client.deregister_container_instance(cluster: service_config.cluster, container_instance: i.container_instance_arn, force: true)
               deregistered_instance_ids << i.ec2_instance_id
             rescue Aws::ECS::Errors::InvalidParameterException
             end
@@ -400,6 +399,14 @@ module EcsDeploy
         detach_and_terminate_instances(targets.map(&:instance_id))
       rescue => e
         AutoScaler.error_logger.error(e)
+      end
+
+      def running_essential_task?(instance, service_config)
+        return false if instance.running_tasks_count == 0
+
+        task_arns = service_config.client.list_tasks(cluster: service_config.cluster, container_instance: instance.container_instance_arn).task_arns
+        task_groups = service_config.client.describe_tasks(cluster: service_config.cluster, tasks: task_arns).tasks.map(&:group)
+        task_groups.include?("service:#{service_config.name}")
       end
     end
   end
