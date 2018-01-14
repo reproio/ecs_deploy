@@ -1,3 +1,5 @@
+require 'aws-sdk-autoscaling'
+require 'aws-sdk-cloudwatch'
 require 'yaml'
 require 'logger'
 require 'time'

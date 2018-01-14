@@ -1,3 +1,4 @@
+require 'aws-sdk-cloudwatchevents'
 require 'timeout'
 
 module EcsDeploy
