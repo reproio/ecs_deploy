@@ -16,6 +16,7 @@ module EcsDeploy
       placement_strategy: [],
       network_configuration: nil,
       health_check_grace_period_seconds: nil,
+      scheduling_strategy: 'REPLICA',
       region: nil,
       delete: false
     )
@@ -30,6 +31,7 @@ module EcsDeploy
       @placement_strategy = placement_strategy
       @network_configuration = network_configuration
       @health_check_grace_period_seconds = health_check_grace_period_seconds
+      @scheduling_strategy = scheduling_strategy
       @revision = revision
       region ||= EcsDeploy.config.default_region
       @response = nil
@@ -70,6 +72,10 @@ module EcsDeploy
             load_balancers: @load_balancers,
           })
         end
+        if @scheduling_strategy == 'DAEMON'
+          service_options[:scheduling_strategy] = @scheduling_strategy
+          service_options.delete(:desired_count)
+        end
         @response = @client.create_service(service_options)
         EcsDeploy.logger.info "create service [#{@service_name}] [#{@region}] [#{Paint['OK', :green]}]"
       else
@@ -83,8 +89,10 @@ module EcsDeploy
     end
 
     def delete_service
-      @client.update_service(cluster: @cluster, service: @service_name, desired_count: 0)
-      sleep 1
+      if @scheduling_strategy != 'DAEMON'
+        @client.update_service(cluster: @cluster, service: @service_name, desired_count: 0)
+        sleep 1
+      end
       @client.delete_service(cluster: @cluster, service: @service_name)
       EcsDeploy.logger.info "delete service [#{@service_name}] [#{@region}] [#{Paint['OK', :green]}]"
     end
