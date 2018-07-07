@@ -13,11 +13,13 @@ module EcsDeploy
       task_definition_name:, region: nil,
       network_mode: "bridge", volumes: [], container_definitions: [], placement_constraints: [],
       task_role_arn: nil,
+      execution_role_arn: nil,
       requires_compatibilities: nil,
       cpu: nil, memory: nil
     )
       @task_definition_name = task_definition_name
       @task_role_arn        = task_role_arn
+      @execution_role_arn   = execution_role_arn
       region ||= EcsDeploy.config.default_region
 
       @container_definitions = container_definitions.map do |cd|
@@ -58,6 +60,7 @@ module EcsDeploy
         volumes: @volumes,
         placement_constraints: @placement_constraints,
         task_role_arn: @task_role_arn,
+        execution_role_arn: @execution_role_arn,
         requires_compatibilities: @requires_compatibilities,
         cpu: @cpu, memory: @memory,
       })

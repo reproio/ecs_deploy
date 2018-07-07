@@ -32,6 +32,7 @@ namespace :ecs do
             task_definition_name: t[:name],
             container_definitions: t[:container_definitions],
             task_role_arn: t[:task_role_arn],
+            execution_role_arn: t[:execution_role_arn],
             volumes: t[:volumes],
             network_mode: t[:network_mode],
             placement_constraints: t[:placement_constraints],
