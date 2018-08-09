@@ -406,9 +406,8 @@ module EcsDeploy
       def running_essential_task?(instance, service_config)
         return false if instance.running_tasks_count == 0
 
-        task_arns = service_config.client.list_tasks(cluster: service_config.cluster, container_instance: instance.container_instance_arn).task_arns
-        task_groups = service_config.client.describe_tasks(cluster: service_config.cluster, tasks: task_arns).tasks.map(&:group)
-        task_groups.include?("service:#{service_config.name}")
+        container_arns = service_config.client.list_container_instances(cluster: service_config.cluster, filter: "task:group == service:#{service_config.name}")[0]
+        container_arns.include?(instance.container_instance_arn)
       end
     end
   end
