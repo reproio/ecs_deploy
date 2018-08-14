@@ -239,7 +239,7 @@ module EcsDeploy
         AutoScaler.error_logger.error(e)
       end
 
-      def fetch_container_instances
+      def fetch_all_container_instances
         arns = []
         resp = nil
         cl = client
@@ -334,9 +334,9 @@ module EcsDeploy
 
         if current_asg.desired_capacity > desired_capacity
           diff = current_asg.desired_capacity - desired_capacity
-          container_instances = service_config.fetch_container_instances
+          container_instances = service_config.fetch_all_container_instances
           deregisterable_instances = container_instances.select do |i|
-            i.pending_tasks_count == 0 && !running_essential_task?(i, service_config)
+            i.pending_tasks_count == 0 && !running_essential_task?(i, service_config) # L.339
           end
 
           AutoScaler.logger.info "Fetch deregisterable instances: #{deregisterable_instances.map(&:ec2_instance_id).inspect}"
@@ -389,7 +389,7 @@ module EcsDeploy
       end
 
       def detach_and_terminate_orphan_instances(service_config)
-        container_instance_ids = service_config.fetch_container_instances.map(&:ec2_instance_id)
+        container_instance_ids = service_config.fetch_all_container_instances.map(&:ec2_instance_id)
         orphans = instances(reload: true).reject { |i| container_instance_ids.include?(i.instance_id) }.map(&:instance_id)
 
         return if orphans.empty?
