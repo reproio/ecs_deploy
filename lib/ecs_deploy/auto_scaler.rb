@@ -239,12 +239,34 @@ module EcsDeploy
         AutoScaler.error_logger.error(e)
       end
 
-      def fetch_all_container_instances
+      def fetch_container_instances_in_cluster
         arns = []
         resp = nil
         cl = client
         loop do
           options = {cluster: cluster}
+          options.merge(next_token: resp.next_token) if resp && resp.next_token
+          resp = cl.list_container_instances(options)
+          arns.concat(resp.container_instance_arns)
+          break unless resp.next_token
+        end
+
+        chunk_size = 50
+        container_instances = []
+        arns.each_slice(chunk_size) do |arn_chunk|
+          is = cl.describe_container_instances(cluster: cluster, container_instances: arn_chunk).container_instances
+          container_instances.concat(is)
+        end
+
+        container_instances
+      end
+
+      def fetch_container_instances_in_service
+        arns = []
+        resp = nil
+        cl = client
+        loop do
+          options = {cluster: cluster, filter: "task:group == service:#{name}"}
           options.merge(next_token: resp.next_token) if resp && resp.next_token
           resp = cl.list_container_instances(options)
           arns.concat(resp.container_instance_arns)
@@ -334,9 +356,10 @@ module EcsDeploy
 
         if current_asg.desired_capacity > desired_capacity
           diff = current_asg.desired_capacity - desired_capacity
-          container_instances = service_config.fetch_all_container_instances
-          deregisterable_instances = container_instances.select do |i|
-            i.pending_tasks_count == 0 && !running_essential_task?(i, service_config) # L.339
+          container_instances_in_service = service_config.fetch_container_instances_in_service
+          container_instances_in_cluster = service_config.fetch_container_instances_in_cluster
+          deregisterable_instances = container_instances_in_cluster.select do |i|
+            i.pending_tasks_count == 0 && !running_essential_task?(i, container_instances_in_service)
           end
 
           AutoScaler.logger.info "Fetch deregisterable instances: #{deregisterable_instances.map(&:ec2_instance_id).inspect}"
@@ -389,7 +412,7 @@ module EcsDeploy
       end
 
       def detach_and_terminate_orphan_instances(service_config)
-        container_instance_ids = service_config.fetch_all_container_instances.map(&:ec2_instance_id)
+        container_instance_ids = service_config.fetch_container_instances_in_cluster.map(&:ec2_instance_id)
         orphans = instances(reload: true).reject { |i| container_instance_ids.include?(i.instance_id) }.map(&:instance_id)
 
         return if orphans.empty?
@@ -403,10 +426,10 @@ module EcsDeploy
         AutoScaler.error_logger.error(e)
       end
 
-      def running_essential_task?(instance, service_config)
+      def running_essential_task?(instance, container_instances_in_service)
         return false if instance.running_tasks_count == 0
 
-        container_arns = service_config.client.list_container_instances(cluster: service_config.cluster, filter: "task:group == service:#{service_config.name}")[0]
+        container_arns = container_instances_in_service.map(&:container_instance_arn)
         container_arns.include?(instance.container_instance_arn)
       end
     end
