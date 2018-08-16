@@ -261,7 +261,7 @@ module EcsDeploy
         container_instances
       end
 
-      def fetch_container_instances_in_service
+      def fetch_container_instance_arns_in_service
         arns = []
         resp = nil
         cl = client
@@ -273,14 +273,7 @@ module EcsDeploy
           break unless resp.next_token
         end
 
-        chunk_size = 50
-        container_instances = []
-        arns.each_slice(chunk_size) do |arn_chunk|
-          is = cl.describe_container_instances(cluster: cluster, container_instances: arn_chunk).container_instances
-          container_instances.concat(is)
-        end
-
-        container_instances
+        arns
       end
 
       private
@@ -356,10 +349,10 @@ module EcsDeploy
 
         if current_asg.desired_capacity > desired_capacity
           diff = current_asg.desired_capacity - desired_capacity
-          container_instances_in_service = service_config.fetch_container_instances_in_service
+          container_instance_arns_in_service = service_config.fetch_container_instance_arns_in_service
           container_instances_in_cluster = service_config.fetch_container_instances_in_cluster
           deregisterable_instances = container_instances_in_cluster.select do |i|
-            i.pending_tasks_count == 0 && !running_essential_task?(i, container_instances_in_service)
+            i.pending_tasks_count == 0 && !running_essential_task?(i, container_instance_arns_in_service)
           end
 
           AutoScaler.logger.info "Fetch deregisterable instances: #{deregisterable_instances.map(&:ec2_instance_id).inspect}"
@@ -426,11 +419,10 @@ module EcsDeploy
         AutoScaler.error_logger.error(e)
       end
 
-      def running_essential_task?(instance, container_instances_in_service)
+      def running_essential_task?(instance, container_instance_arns_in_service)
         return false if instance.running_tasks_count == 0
 
-        container_arns = container_instances_in_service.map(&:container_instance_arn)
-        container_arns.include?(instance.container_instance_arn)
+        container_instance_arns_in_service.include?(instance.container_instance_arn)
       end
     end
   end
