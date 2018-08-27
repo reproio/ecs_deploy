@@ -94,11 +94,13 @@ module EcsDeploy
       end
 
       def service_configs
-        @service_configs ||= @config["services"].map(&ServiceConfig.method(:new))
+        @service_configs ||= @config["services"].map { |c| ServiceConfig.new(c, @logger) }
       end
 
       def auto_scaling_group_configs
-        @auto_scaling_group_configs ||= @config["auto_scaling_groups"].map(&AutoScalingConfig.method(:new))
+        @auto_scaling_group_configs ||= @config["auto_scaling_groups"].map do |c|
+          AutoScalingConfig.new(c, @logger)
+        end
       end
 
       private
@@ -127,10 +129,15 @@ module EcsDeploy
     end
 
     module ConfigBase
-      def initialize(attributes = {})
+      def initialize(attributes = {}, logger)
         attributes.each do |key, val|
           send("#{key}=", val)
         end
+        @logger = logger
+      end
+
+      def logger
+        @logger
       end
     end
 
@@ -138,15 +145,15 @@ module EcsDeploy
     ServiceConfig = Struct.new(*SERVICE_CONFIG_ATTRIBUTES) do
       include ConfigBase
 
-      def initialize(attributes = {})
-        super(attributes)
+      def initialize(attributes = {}, logger)
+        super
         self.idle_time ||= 60
         self.max_task_count = Array(max_task_count)
         self.upscale_triggers = upscale_triggers.to_a.map do |t|
-          TriggerConfig.new(t.merge(region: region))
+          TriggerConfig.new(t.merge(region: region), logger)
         end
         self.downscale_triggers = downscale_triggers.to_a.map do |t|
-          TriggerConfig.new(t.merge(region: region))
+          TriggerConfig.new(t.merge(region: region), logger)
         end
         self.max_task_count.sort!
         self.desired_count = fetch_service.desired_count
@@ -158,7 +165,8 @@ module EcsDeploy
         Aws::ECS::Client.new(
           access_key_id: EcsDeploy.config.access_key_id,
           secret_access_key: EcsDeploy.config.secret_access_key,
-          region: region
+          region: region,
+          logger: logger
         )
       end
 
@@ -290,7 +298,8 @@ module EcsDeploy
         Aws::CloudWatch::Client.new(
           access_key_id: EcsDeploy.config.access_key_id,
           secret_access_key: EcsDeploy.config.secret_access_key,
-          region: region
+          region: region,
+          logger: logger
         )
       end
 
@@ -317,7 +326,8 @@ module EcsDeploy
         Aws::AutoScaling::Client.new(
           access_key_id: EcsDeploy.config.access_key_id,
           secret_access_key: EcsDeploy.config.secret_access_key,
-          region: region
+          region: region,
+          logger: logger
         )
       end
 
@@ -325,7 +335,8 @@ module EcsDeploy
         Aws::EC2::Client.new(
           access_key_id: EcsDeploy.config.access_key_id,
           secret_access_key: EcsDeploy.config.secret_access_key,
-          region: region
+          region: region,
+          logger: logger
         )
       end
 
