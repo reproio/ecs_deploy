@@ -248,15 +248,10 @@ module EcsDeploy
       end
 
       def fetch_container_instances_in_cluster
-        arns = []
-        resp = nil
         cl = client
-        loop do
-          options = {cluster: cluster}
-          options.merge(next_token: resp.next_token) if resp && resp.next_token
-          resp = cl.list_container_instances(options)
-          arns.concat(resp.container_instance_arns)
-          break unless resp.next_token
+        resp = cl.list_container_instances(cluster: cluster)
+        resp.each do |r|
+          arns.concat(r.container_instance_arns)
         end
 
         chunk_size = 50
@@ -270,15 +265,9 @@ module EcsDeploy
       end
 
       def fetch_container_instance_arns_in_service
-        arns = []
-        resp = nil
-        cl = client
-        loop do
-          options = {cluster: cluster, filter: "task:group == service:#{name}"}
-          options.merge(next_token: resp.next_token) if resp && resp.next_token
-          resp = cl.list_container_instances(options)
-          arns.concat(resp.container_instance_arns)
-          break unless resp.next_token
+        resp = client.list_container_instances(cluster: cluster, filter: "task:group == service:#{name}")
+        resp.each do |r|
+          arns.concat(r.container_instance_arns)
         end
 
         arns
