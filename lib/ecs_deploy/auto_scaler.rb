@@ -248,6 +248,7 @@ module EcsDeploy
       end
 
       def fetch_container_instances_in_cluster
+        arns = []
         cl = client
         resp = cl.list_container_instances(cluster: cluster)
         resp.each do |r|
@@ -265,6 +266,7 @@ module EcsDeploy
       end
 
       def fetch_container_instance_arns_in_service
+        arns = []
         resp = client.list_container_instances(cluster: cluster, filter: "task:group == service:#{name}")
         resp.each do |r|
           arns.concat(r.container_instance_arns)
