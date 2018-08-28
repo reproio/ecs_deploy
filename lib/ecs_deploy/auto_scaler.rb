@@ -145,6 +145,8 @@ module EcsDeploy
     ServiceConfig = Struct.new(*SERVICE_CONFIG_ATTRIBUTES) do
       include ConfigBase
 
+      MAX_DETACHABLE_INSTANCE_COUNT = 20
+
       def initialize(attributes = {}, logger)
         super
         self.idle_time ||= 60
@@ -390,11 +392,13 @@ module EcsDeploy
       def detach_and_terminate_instances(instance_ids)
         return if instance_ids.empty?
 
-        client.detach_instances(
-          auto_scaling_group_name: name,
-          instance_ids: instance_ids,
-          should_decrement_desired_capacity: true
-        )
+        instance_ids.each_slice(MAX_DETACHABLE_INSTANCE_COUNT) do |ids|
+          client.detach_instances(
+            auto_scaling_group_name: name,
+            instance_ids: ids,
+            should_decrement_desired_capacity: true
+          )
+        end
 
         AutoScaler.logger.info "Detach instances from ASG #{name}: #{instance_ids.inspect}"
         sleep 3
