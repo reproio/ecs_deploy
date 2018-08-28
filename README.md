@@ -233,6 +233,52 @@ ecs_auto_scaler <config yaml>
 
 I recommends deploy `ecs_auto_scaler` on ECS too.
 
+### IAM policy for autoscaler
+
+The following policy is required for the preceding configuration:
+
+```
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:DescribeAutoScalingGroups",
+        "cloudwatch:DescribeAlarms",
+        "ec2:DescribeInstances",
+        "ec2:TerminateInstances",
+        "ecs:DescribeContainerInstances",
+        "ecs:DescribeServices",
+        "ecs:ListContainerInstances",
+        "ecs:UpdateService"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:DetachInstances",
+        "autoscaling:UpdateAutoScalingGroup"
+      ],
+      "Resource": [
+        "arn:aws:autoscaling:ap-northeast-1:<account-id>:autoScalingGroup:<group-id>:autoScalingGroupName/ecs-cluster-nodes"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DeregisterContainerInstance"
+      ],
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-1:<account-id>:cluster/ecs-cluster"
+      ]
+    }
+  ]
+}
+```
+
+
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
