@@ -9,35 +9,6 @@ module EcsDeploy
     AutoScalingConfig = Struct.new(:name, :region, :buffer) do
       include ConfigBase
 
-      def client
-        Aws::AutoScaling::Client.new(
-          access_key_id: EcsDeploy.config.access_key_id,
-          secret_access_key: EcsDeploy.config.secret_access_key,
-          region: region,
-          logger: logger
-        )
-      end
-
-      def ec2_client
-        Aws::EC2::Client.new(
-          access_key_id: EcsDeploy.config.access_key_id,
-          secret_access_key: EcsDeploy.config.secret_access_key,
-          region: region,
-          logger: logger
-        )
-      end
-
-      def instances(reload: false)
-        if reload || @instances.nil?
-          resp = client.describe_auto_scaling_groups({
-            auto_scaling_group_names: [name],
-          })
-          @instances = resp.auto_scaling_groups[0].instances
-        else
-          @instances
-        end
-      end
-
       def update_auto_scaling_group(total_service_count, service_config)
         desired_capacity = total_service_count + buffer.to_i
 
@@ -59,7 +30,7 @@ module EcsDeploy
           deregisterable_instances.each do |i|
             break if deregistered_instance_ids.size >= diff
             begin
-              service_config.client.deregister_container_instance(cluster: service_config.cluster, container_instance: i.container_instance_arn, force: true)
+              service_config.deregister_container_instance(i.container_instance_arn)
               deregistered_instance_ids << i.ec2_instance_id
             rescue Aws::ECS::Errors::InvalidParameterException
             end
@@ -117,6 +88,37 @@ module EcsDeploy
         detach_and_terminate_instances(targets.map(&:instance_id))
       rescue => e
         AutoScaler.error_logger.error(e)
+      end
+
+      private
+
+      def client
+        Aws::AutoScaling::Client.new(
+          access_key_id: EcsDeploy.config.access_key_id,
+          secret_access_key: EcsDeploy.config.secret_access_key,
+          region: region,
+          logger: logger
+        )
+      end
+
+      def ec2_client
+        Aws::EC2::Client.new(
+          access_key_id: EcsDeploy.config.access_key_id,
+          secret_access_key: EcsDeploy.config.secret_access_key,
+          region: region,
+          logger: logger
+        )
+      end
+
+      def instances(reload: false)
+        if reload || @instances.nil?
+          resp = client.describe_auto_scaling_groups({
+            auto_scaling_group_names: [name],
+          })
+          @instances = resp.auto_scaling_groups[0].instances
+        else
+          @instances
+        end
       end
 
       def running_essential_task?(instance, container_instance_arns_in_service)
