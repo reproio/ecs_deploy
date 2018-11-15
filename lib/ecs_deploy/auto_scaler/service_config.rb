@@ -16,15 +16,54 @@ module EcsDeploy
         self.idle_time ||= 60
         self.max_task_count = Array(max_task_count)
         self.upscale_triggers = upscale_triggers.to_a.map do |t|
-          TriggerConfig.new(t.merge(region: region), logger)
+          TriggerConfig.new({"region" => region, "step" => step}.merge(t), logger)
         end
         self.downscale_triggers = downscale_triggers.to_a.map do |t|
-          TriggerConfig.new(t.merge(region: region), logger)
+          TriggerConfig.new({"region" => region, "step" => step}.merge(t), logger)
         end
         self.max_task_count.sort!
         self.desired_count = fetch_service.desired_count
         @reach_max_at = nil
         @last_updated_at = nil
+        @logger = logger
+      end
+
+      def adjust_desired_count
+        if idle?
+          @logger.debug "#{name} is idling"
+          return
+        end
+
+        difference = 0
+        upscale_triggers.each do |trigger|
+          next if difference >= trigger.step
+
+          if trigger.match?
+            @logger.info "Fire upscale trigger of #{name} by #{trigger.alarm_name} #{trigger.state}"
+            difference = trigger.step
+          end
+        end
+
+        if difference == 0 && desired_count > current_min_task_count
+          downscale_triggers.each do |trigger|
+            next unless trigger.match?
+
+            @logger.info "Fire downscale trigger of #{name} by #{trigger.alarm_name} #{trigger.state}"
+            difference = [difference, -trigger.step].min
+          end
+        end
+
+        if current_min_task_count > desired_count + difference
+          difference = current_min_task_count - desired_count
+        end
+
+        if difference >= 0 && desired_count > max_task_count.max
+          difference = max_task_count.max - desired_count
+        end
+
+        if difference != 0
+          update_service(difference)
+        end
       end
 
       def client
@@ -73,25 +112,25 @@ module EcsDeploy
         if current_level < next_level && overheat? # next max
           level = next_level
           @reach_max_at = nil
-          AutoScaler.logger.info "Service \"#{name}\" is overheat, uses next max count"
+          @logger.info "Service \"#{name}\" is overheat, uses next max count"
         elsif current_level < next_level && !overheat? # wait cooldown
           level = current_level
           now = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
           @reach_max_at ||= now
-          AutoScaler.logger.info "Service \"#{name}\" waits cooldown elapsed #{(now - @reach_max_at).to_i}sec"
+          @logger.info "Service \"#{name}\" waits cooldown elapsed #{(now - @reach_max_at).to_i}sec"
         elsif current_level == next_level && next_desired_count >= max_task_count[current_level] # reach current max
           level = current_level
           now = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
           @reach_max_at ||= now
-          AutoScaler.logger.info "Service \"#{name}\" waits cooldown elapsed #{(now - @reach_max_at).to_i}sec"
+          @logger.info "Service \"#{name}\" waits cooldown elapsed #{(now - @reach_max_at).to_i}sec"
         elsif current_level == next_level && next_desired_count < max_task_count[current_level]
           level = current_level
           @reach_max_at = nil
-          AutoScaler.logger.info "Service \"#{name}\" clears cooldown state"
+          @logger.info "Service \"#{name}\" clears cooldown state"
         elsif current_level > next_level
           level = next_level
           @reach_max_at = nil
-          AutoScaler.logger.info "Service \"#{name}\" clears cooldown state"
+          @logger.info "Service \"#{name}\" clears cooldown state"
         end
 
         cl = client
@@ -103,12 +142,12 @@ module EcsDeploy
         )
         cl.wait_until(:services_stable, cluster: cluster, services: [name]) do |w|
           w.before_wait do
-            AutoScaler.logger.debug "wait service stable [#{name}]"
+            @logger.debug "wait service stable [#{name}]"
           end
         end if difference < 0
         @last_updated_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
         self.desired_count = next_desired_count
-        AutoScaler.logger.info "Update service \"#{name}\": desired_count -> #{next_desired_count}"
+        @logger.info "Update service \"#{name}\": desired_count -> #{next_desired_count}"
       rescue => e
         AutoScaler.error_logger.error(e)
       end

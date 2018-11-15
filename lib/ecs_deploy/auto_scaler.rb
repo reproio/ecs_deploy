@@ -37,44 +37,7 @@ module EcsDeploy
           ths = configs.map do |service_config|
             Thread.new(service_config) do |s|
               @logger.debug "Start service scaling of #{s.name}"
-
-              if s.idle?
-                @logger.debug "#{s.name} is idling"
-                next
-              end
-
-              difference = 0
-              s.upscale_triggers.each do |trigger|
-                step = trigger.step || s.step
-                next if difference >= step
-
-                if trigger.match?
-                  logger.info "Fire upscale trigger of #{s.name} by #{trigger.alarm_name} #{trigger.state}"
-                  difference = step
-                end
-              end
-
-              if difference == 0 && s.desired_count > s.current_min_task_count
-                s.downscale_triggers.each do |trigger|
-                  next unless trigger.match?
-
-                  logger.info "Fire downscale trigger of #{s.name} by #{trigger.alarm_name} #{trigger.state}"
-                  step = trigger.step || s.step
-                  difference = [difference, -step].min
-                end
-              end
-
-              if s.current_min_task_count > s.desired_count + difference
-                difference = s.current_min_task_count - s.desired_count
-              end
-
-              if difference >= 0 && s.desired_count > s.max_task_count.max
-                difference = s.max_task_count.max - s.desired_count
-              end
-
-              if difference != 0
-                s.update_service(difference)
-              end
+              s.adjust_desired_count
             end
           end
           ths.each { |th| th.abort_on_exception = true }

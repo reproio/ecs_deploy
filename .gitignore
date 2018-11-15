@@ -8,4 +8,5 @@
 /spec/reports/
 /tmp/
 
+.rspec_status
 .envrc
