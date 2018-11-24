@@ -24,7 +24,7 @@ module EcsDeploy
             i.pending_tasks_count == 0 && !running_essential_task?(i, container_instance_arns_in_service)
           end
 
-          AutoScaler.logger.info "Fetch deregisterable instances: #{deregisterable_instances.map(&:ec2_instance_id).inspect}"
+          @logger.info "Fetch deregisterable instances: #{deregisterable_instances.map(&:ec2_instance_id).inspect}"
 
           deregistered_instance_ids = []
           deregisterable_instances.each do |i|
@@ -36,11 +36,11 @@ module EcsDeploy
             end
           end
 
-          AutoScaler.logger.info "Deregistered instances: #{deregistered_instance_ids.inspect}"
+          @logger.info "Deregistered instances: #{deregistered_instance_ids.inspect}"
 
           detach_and_terminate_instances(deregistered_instance_ids)
 
-          AutoScaler.logger.info "Update auto scaling group \"#{name}\": desired_capacity -> #{desired_capacity}"
+          @logger.info "Update auto scaling group \"#{name}\": desired_capacity -> #{desired_capacity}"
         elsif current_asg.desired_capacity < desired_capacity
           client.update_auto_scaling_group(
             auto_scaling_group_name: name,
@@ -48,7 +48,7 @@ module EcsDeploy
             max_size: [current_asg.max_size, desired_capacity].max,
             desired_capacity: desired_capacity,
           )
-          AutoScaler.logger.info "Update auto scaling group \"#{name}\": desired_capacity -> #{desired_capacity}"
+          @logger.info "Update auto scaling group \"#{name}\": desired_capacity -> #{desired_capacity}"
         end
       rescue => e
         AutoScaler.error_logger.error(e)
@@ -65,12 +65,12 @@ module EcsDeploy
           )
         end
 
-        AutoScaler.logger.info "Detach instances from ASG #{name}: #{instance_ids.inspect}"
+        @logger.info "Detach instances from ASG #{name}: #{instance_ids.inspect}"
         sleep 3
 
         ec2_client.terminate_instances(instance_ids: instance_ids)
 
-        AutoScaler.logger.info "Terminated instances: #{instance_ids.inspect}"
+        @logger.info "Terminated instances: #{instance_ids.inspect}"
       rescue => e
         AutoScaler.error_logger.error(e)
       end
