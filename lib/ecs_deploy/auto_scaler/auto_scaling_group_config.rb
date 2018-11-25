@@ -9,10 +9,10 @@ module EcsDeploy
     AutoScalingGroupConfig = Struct.new(:name, :region, :buffer) do
       include ConfigBase
 
-      def update_auto_scaling_group(total_service_count, service_config)
+      def update_desired_capacity(required_capacity, service_config)
         detach_and_terminate_orphan_instances(service_config)
 
-        desired_capacity = total_service_count + buffer.to_i
+        desired_capacity = (required_capacity + buffer.to_f).ceil
 
         current_asg = client.describe_auto_scaling_groups({
           auto_scaling_group_names: [name],
@@ -85,7 +85,7 @@ module EcsDeploy
 
         return if orphans.empty?
 
-        targets = ec2_client.describe_instances(instance_ids: orphans).reservations[0].instances.select do |i|
+        targets = ec2_client.describe_instances(instance_ids: orphans).reservations.flat_map(&:instances).select do |i|
           (Time.now - i.launch_time) > 600
         end
 

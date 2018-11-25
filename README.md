@@ -189,7 +189,16 @@ And rollback
 
 ## Autoscaler
 
-Write config file (YAML format).
+The autoscaler of `ecs_deploy` supports auto scaling of ECS services and clusters.
+
+### Prerequisits
+
+* You use a ECS cluster whose instances belong to either an auto scaling group or a spot fleet request
+* You have CloudWatch alarms and you want to scale services when their state changes
+
+### How to use autoscaler
+
+First, write a configuration file (YAML format) like below:
 
 ```yaml
 # ポーリング時にupscale_triggersに指定した状態のalarmがあればstep分serviceとinstanceを増やす (max_task_countまで)
@@ -202,12 +211,28 @@ polling_interval: 60
 auto_scaling_groups:
   - name: ecs-cluster-nodes
     region: ap-northeast-1
-    buffer: 1 # タスク数に対する余剰のインスタンス数
+    # autoscaler will set the capacity to (buffer + desired_tasks * required_capacity).
+    # Adjust this value if it takes much time to prepare ECS instances and launch new tasks.
+    buffer: 1
+
+spot_fleet_requests:
+  - id: sfr-354de735-2c17-4565-88c9-10ada5b957e5
+    region: ap-northeast-1
+    buffer: 1
+
+# If you specify `spot_instance_intrp_warns_queue_urls` as SQS queue for spot instance interruption warnings,
+# autoscaler will polls them and set the state of instances to be intrrupted to "DRAINING".
+# autoscaler will also waits for the capacity of active instances in the cluster being decreased
+# when the capacity of spot fleet request is decreased,
+# so you should specify URLs or set the state of the instances to "DRAINING" manually.
+spot_instance_intrp_warns_queue_urls:
+  - https://sqs.ap-northeast-1.amazonaws.com/<account-id>/spot-instance-intrp-warns
 
 services:
   - name: repro-api-production
     cluster: ecs-cluster
     region: ap-northeast-1
+    # auto_scaling_group_name or spot fleet request ID the instances in the cluster belongs to
     auto_scaling_group_name: ecs-cluster-nodes
     step: 1
     idle_time: 240
@@ -216,6 +241,9 @@ services:
       - {from: "1:45", to: "4:30", count: 8}
     cooldown_time_for_reach_max: 600
     min_task_count: 0
+    # Required capacity per task (default: 1)
+    # You should specify "binpack" as task placement strategy if the value is less than 1 and you use an auto scaling group.
+    required_capacity: 0.5
     upscale_triggers:
       - alarm_name: "ECS [repro-api-production] CPUUtilization"
         state: ALARM
@@ -225,7 +253,26 @@ services:
     downscale_triggers:
       - alarm_name: "ECS [repro-api-production] CPUUtilization (low)"
         state: OK
+
+  - name: repro-worker-production
+    cluster: ecs-cluster-for-worker
+    region: ap-northeast-1
+    spot_fleet_request_id: sfr-354de735-2c17-4565-88c9-10ada5b957e5
+    step: 1
+    idle_time: 240
+    cooldown_time_for_reach_max: 600
+    min_task_count: 0
+    required_capacity: 2
+    upscale_triggers:
+      - alarm_name: "ECS [repro-worker-production] CPUUtilization"
+        state: ALARM
+    downscale_triggers:
+      - alarm_name: "ECS [repro-worker-production] CPUUtilization (low)"
+        state: OK
+
 ```
+
+Then, execute the following command:
 
 ```sh
 ecs_auto_scaler <config yaml>
@@ -235,7 +282,7 @@ I recommends deploy `ecs_auto_scaler` on ECS too.
 
 ### IAM policy for autoscaler
 
-The following policy is required for the preceding configuration:
+The following policy is required for the preceding configuration of "repro-api-production" service:
 
 ```
 {
@@ -277,6 +324,52 @@ The following policy is required for the preceding configuration:
   ]
 }
 ```
+
+The following policy is required for the preceding configuration of "repro-worker-production" service:
+
+```
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "ecs:UpdateContainerInstancesState",
+      "Resource": "*",
+      "Condition": {
+        "ArnEquals": {
+          "ecs:cluster": "arn:aws:ecs:ap-northeast-1:<account-id>:cluster/ecs-cluster-for-worker"
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sqs:DeleteMessage",
+        "sqs:DeleteMessageBatch",
+        "sqs:ReceiveMessage"
+      ],
+      "Resource": "arn:aws:sqs:ap-northeast-1:<account-id>:spot-instance-intrp-warns"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:DescribeAlarms",
+        "ec2:ModifySpotFleetRequest",
+        "ec2:DescribeInstances",
+        "ec2:TerminateInstances",
+        "ecs:ListContainerInstances",
+        "ecs:DescribeContainerInstances",
+        "ecs:DescribeServices",
+        "ec2:DescribeSpotFleetInstances",
+        "ec2:DescribeSpotFleetRequests",
+        "ecs:UpdateService"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
 
 
 ## Development

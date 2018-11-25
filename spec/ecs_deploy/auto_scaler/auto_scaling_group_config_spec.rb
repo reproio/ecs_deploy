@@ -4,7 +4,7 @@ require "ecs_deploy/auto_scaler/auto_scaling_group_config"
 require "ecs_deploy/auto_scaler/service_config"
 
 RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
-  describe "#update_auto_scaling_group" do
+  describe "#update_desired_capacity" do
     subject(:auto_scaling_group_config) do
       described_class.new({
         "name"   => asg_name,
@@ -75,7 +75,7 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
         )
         expect_any_instance_of(Aws::EC2::Client).to receive(:terminate_instances).with(instance_ids: ["i-111111", "i-333333"])
 
-        auto_scaling_group_config.update_auto_scaling_group(desired_tasks, service_config)
+        auto_scaling_group_config.update_desired_capacity(desired_tasks, service_config)
       end
     end
 
@@ -95,7 +95,7 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
           desired_capacity: desired_tasks + buffer,
         )
 
-        auto_scaling_group_config.update_auto_scaling_group(desired_tasks, service_config)
+        auto_scaling_group_config.update_desired_capacity(desired_tasks, service_config)
       end
     end
 
@@ -111,7 +111,7 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
         expect_any_instance_of(Aws::EC2::Client).to_not receive(:terminate_instances)
         expect_any_instance_of(Aws::AutoScaling::Client).to_not receive(:update_auto_scaling_group)
 
-        auto_scaling_group_config.update_auto_scaling_group(desired_tasks, service_config)
+        auto_scaling_group_config.update_desired_capacity(desired_tasks, service_config)
       end
     end
   end

@@ -5,7 +5,7 @@ require "ecs_deploy/auto_scaler/trigger_config"
 
 module EcsDeploy
   module AutoScaler
-    SERVICE_CONFIG_ATTRIBUTES = %i(name cluster region auto_scaling_group_name step max_task_count min_task_count idle_time scheduled_min_task_count cooldown_time_for_reach_max upscale_triggers downscale_triggers desired_count)
+    SERVICE_CONFIG_ATTRIBUTES = %i(name cluster region auto_scaling_group_name spot_fleet_request_id step max_task_count min_task_count idle_time scheduled_min_task_count cooldown_time_for_reach_max upscale_triggers downscale_triggers desired_count required_capacity)
     ServiceConfig = Struct.new(*SERVICE_CONFIG_ATTRIBUTES) do
       include ConfigBase
 
@@ -13,6 +13,9 @@ module EcsDeploy
 
       def initialize(attributes = {}, logger)
         super
+        if auto_scaling_group_name && spot_fleet_request_id
+          raise ArgumentError, "You can specify only one of 'auto_scaling_group_name' or 'spot_fleet_request_name'"
+        end
         self.idle_time ||= 60
         self.max_task_count = Array(max_task_count)
         self.upscale_triggers = upscale_triggers.to_a.map do |t|
@@ -23,6 +26,7 @@ module EcsDeploy
         end
         self.max_task_count.sort!
         self.desired_count = fetch_service.desired_count
+        self.required_capacity ||= 1
         @reach_max_at = nil
         @last_updated_at = nil
         @logger = logger
