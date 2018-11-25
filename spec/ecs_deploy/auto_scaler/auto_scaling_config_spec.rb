@@ -65,6 +65,7 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingConfig do
       end
 
       it "terminates instances without esesstial running tasks" do
+        expect(auto_scaling_config).to receive(:detach_and_terminate_orphan_instances).with(service_config)
         expect(service_config).to receive(:deregister_container_instance).with("with_no_task_1")
         expect(service_config).to receive(:deregister_container_instance).with("with_no_essential_running_task")
         expect_any_instance_of(Aws::AutoScaling::Client).to receive(:detach_instances).with(
@@ -86,6 +87,7 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingConfig do
       end
 
       it "updates the desired capacity of the auto scaling group" do
+        expect(auto_scaling_config).to receive(:detach_and_terminate_orphan_instances).with(service_config)
         expect_any_instance_of(Aws::AutoScaling::Client).to receive(:update_auto_scaling_group).with(
           auto_scaling_group_name: asg_name,
           min_size: 0,
@@ -105,6 +107,7 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingConfig do
       end
 
       it "does nothing" do
+        expect(auto_scaling_config).to receive(:detach_and_terminate_orphan_instances).with(service_config)
         expect_any_instance_of(Aws::EC2::Client).to_not receive(:terminate_instances)
         expect_any_instance_of(Aws::AutoScaling::Client).to_not receive(:update_auto_scaling_group)
 

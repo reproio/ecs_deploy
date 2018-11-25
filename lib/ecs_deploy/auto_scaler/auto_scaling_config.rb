@@ -10,6 +10,8 @@ module EcsDeploy
       include ConfigBase
 
       def update_auto_scaling_group(total_service_count, service_config)
+        detach_and_terminate_orphan_instances(service_config)
+
         desired_capacity = total_service_count + buffer.to_i
 
         current_asg = client.describe_auto_scaling_groups({
@@ -54,6 +56,8 @@ module EcsDeploy
         AutoScaler.error_logger.error(e)
       end
 
+      private
+
       def detach_and_terminate_instances(instance_ids)
         return if instance_ids.empty?
 
@@ -89,8 +93,6 @@ module EcsDeploy
       rescue => e
         AutoScaler.error_logger.error(e)
       end
-
-      private
 
       def client
         Aws::AutoScaling::Client.new(

@@ -48,7 +48,6 @@ module EcsDeploy
 
           total_service_count = configs.inject(0) { |sum, s| sum + s.desired_count }
           asg_config.update_auto_scaling_group(total_service_count, configs[0])
-          asg_config.detach_and_terminate_orphan_instances(configs[0])
         end
       end
 
