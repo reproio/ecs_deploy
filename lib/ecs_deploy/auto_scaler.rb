@@ -2,7 +2,7 @@ require "logger"
 require "time"
 require "yaml"
 
-require "ecs_deploy/auto_scaler/auto_scaling_config"
+require "ecs_deploy/auto_scaler/auto_scaling_group_config"
 require "ecs_deploy/auto_scaler/service_config"
 
 module EcsDeploy
@@ -62,7 +62,7 @@ module EcsDeploy
 
       def auto_scaling_group_configs
         @auto_scaling_group_configs ||= @config["auto_scaling_groups"].map do |c|
-          AutoScalingConfig.new(c, @logger)
+          AutoScalingGroupConfig.new(c, @logger)
         end
       end
 

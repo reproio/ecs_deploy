@@ -6,7 +6,7 @@ require "ecs_deploy/auto_scaler/config_base"
 
 module EcsDeploy
   module AutoScaler
-    AutoScalingConfig = Struct.new(:name, :region, :buffer) do
+    AutoScalingGroupConfig = Struct.new(:name, :region, :buffer) do
       include ConfigBase
 
       def update_auto_scaling_group(total_service_count, service_config)
