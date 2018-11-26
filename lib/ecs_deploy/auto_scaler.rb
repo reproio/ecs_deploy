@@ -13,8 +13,8 @@ module EcsDeploy
       attr_reader :logger, :error_logger
 
       def run(yaml_path, log_file = nil, error_log_file = nil)
-        trap(:TERM) { @stop = true }
-        trap(:INT) { @stop = true }
+        @enable_auto_scaling = true
+        setup_signal_handlers
         @logger = Logger.new(log_file || STDOUT)
         @logger.level = Logger.const_get(ENV["ECS_AUTO_SCALER_LOG_LEVEL"].upcase) if ENV["ECS_AUTO_SCALER_LOG_LEVEL"]
         STDOUT.sync = true unless log_file
@@ -101,6 +101,32 @@ module EcsDeploy
 
       private
 
+      def setup_signal_handlers
+        # Use a thread and a queue to avoid "log writing failed. can't be called from trap context"
+        # cf. https://bugs.ruby-lang.org/issues/14222#note-3
+        signals = Queue.new
+        %i(TERM INT CONT TSTP).each do |sig|
+          trap(sig) { signals << sig }
+        end
+
+        Thread.new do
+          loop do
+            sig = signals.pop
+            case sig
+            when :INT, :TERM
+              @logger.info "Received SIG#{sig}, shutting down gracefully"
+              @stop = true
+            when :CONT
+              @logger.info "Received SIGCONT, resume auto scaling"
+              @enable_auto_scaling = true
+            when :TSTP
+              @logger.info "Received SIGTSTP, pause auto scaling. Send SIGCONT to resume it."
+              @enable_auto_scaling = false
+            end
+          end
+        end
+      end
+
       def wait_polling_interval?(last_executed_at)
         current = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
         diff = current - last_executed_at
@@ -114,6 +140,7 @@ module EcsDeploy
         loop do
           break if @stop
           sleep 1
+          next unless @enable_auto_scaling
           next if wait_polling_interval?(last_executed_at)
           yield
           last_executed_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)

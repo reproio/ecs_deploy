@@ -280,6 +280,14 @@ ecs_auto_scaler <config yaml>
 
 I recommends deploy `ecs_auto_scaler` on ECS too.
 
+### Signals
+
+ Signal    | Description
+-----------|------------------------------------------------------------
+ TERM, INT | Shutdown gracefully
+ CONT      | Resume auto scaling
+ TSTP      | Pause auto scaling (Run only container instance draining)
+
 ### IAM policy for autoscaler
 
 The following policy is required for the preceding configuration of "repro-api-production" service:
@@ -369,7 +377,6 @@ The following policy is required for the preceding configuration of "repro-worke
   ]
 }
 ```
-
 
 
 ## Development
