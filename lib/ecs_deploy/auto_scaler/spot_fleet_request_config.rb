@@ -90,7 +90,8 @@ module EcsDeploy
 
       def calculate_active_instance_capacity(cluster)
         cl = ecs_client
-        total_cpu = cl.list_container_instances(status: "ACTIVE").sum do |resp|
+        total_cpu = cl.list_container_instances(cluster: cluster, status: "ACTIVE").sum do |resp|
+          next 0 if resp.container_instance_arns.empty?
           ecs_client.describe_container_instances(
             cluster: cluster,
             container_instances: resp.container_instance_arns,
