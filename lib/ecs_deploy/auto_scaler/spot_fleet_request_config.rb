@@ -42,9 +42,12 @@ module EcsDeploy
 
         return if orphans.empty?
 
-        instance_ids = ec2_client.describe_instances(instance_ids: orphans).reservations.flat_map(&:instances).select do |i|
-          (Time.now - i.launch_time) > 600
-        end.map(&:instance_id)
+        running_instances = ec2_client.describe_instances(
+          instance_ids: orphans,
+          filters: [{ name: "instance-state-name", values: ["running"] }],
+        ).reservations.flat_map(&:instances)
+        # instances which have just launched might not be registered to the cluster yet.
+        instance_ids = running_instances.select { |i| (Time.now - i.launch_time) > 600 }.map(&:instance_id)
 
         return if instance_ids.empty?
 
