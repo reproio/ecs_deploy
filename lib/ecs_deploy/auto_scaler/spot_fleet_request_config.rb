@@ -89,6 +89,8 @@ module EcsDeploy
             sleep 5
           end
         end
+      rescue Timeout::Error => e
+        AutoScaler.error_logger.warn("`#{__method__}': #{e} (#{e.class})")
       end
 
       def calculate_active_instance_capacity(cluster)
