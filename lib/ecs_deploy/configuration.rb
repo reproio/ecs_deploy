@@ -13,7 +13,6 @@ module EcsDeploy
     def initialize
       @log_level = :info
       @deploy_wait_timeout = 300
-      @ecs_service_role = "ecsServiceRole"
     end
   end
 end
