@@ -9,7 +9,7 @@ module EcsDeploy
 
     def initialize(
       cluster:, rule_name:, schedule_expression:, enabled: true, description: nil, target_id: nil,
-      task_definition_name:, revision: nil, task_count: nil, role_arn:,
+      task_definition_name:, revision: nil, task_count: nil, role_arn:, network_configuration: nil,
       region: nil, container_overrides: nil
     )
       @cluster = cluster
@@ -22,6 +22,7 @@ module EcsDeploy
       @task_count = task_count || 1
       @revision = revision
       @role_arn = role_arn
+      @network_configuration = network_configuration
       region ||= EcsDeploy.config.default_region
       @container_overrides = container_overrides
 
@@ -70,6 +71,10 @@ module EcsDeploy
           task_count: @task_count,
         },
       }
+      if @network_configuration
+        target[:ecs_parameters].merge!(network_configuration: @network_configuration)
+      end
+
       if @container_overrides
         target.merge!(input: { containerOverrides: @container_overrides }.to_json)
       end
