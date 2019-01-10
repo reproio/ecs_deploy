@@ -66,12 +66,19 @@ module EcsDeploy
           placement_constraints: @placement_constraints,
           placement_strategy: @placement_strategy,
         })
-        if @load_balancers
+
+        if @load_balancers && EcsDeploy.config.ecs_service_role
           service_options.merge!({
             role: EcsDeploy.config.ecs_service_role,
+          })
+        end
+
+        if @load_balancers
+          service_options.merge!({
             load_balancers: @load_balancers,
           })
         end
+
         if @scheduling_strategy == 'DAEMON'
           service_options[:scheduling_strategy] = @scheduling_strategy
           service_options.delete(:desired_count)
