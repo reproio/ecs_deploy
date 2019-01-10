@@ -9,7 +9,7 @@ module EcsDeploy
 
     def initialize(
       cluster:, rule_name:, schedule_expression:, enabled: true, description: nil, target_id: nil,
-      task_definition_name:, revision: nil, task_count: nil, role_arn:, network_configuration: nil,
+      task_definition_name:, revision: nil, task_count: nil, role_arn:, network_configuration: nil, launch_type: nil, platform_version: nil, group: nil,
       region: nil, container_overrides: nil
     )
       @cluster = cluster
@@ -23,6 +23,9 @@ module EcsDeploy
       @revision = revision
       @role_arn = role_arn
       @network_configuration = network_configuration
+      @launch_type = launch_type || "EC2"
+      @platform_version = platform_version
+      @group = group
       region ||= EcsDeploy.config.default_region
       @container_overrides = container_overrides
 
@@ -69,11 +72,12 @@ module EcsDeploy
         ecs_parameters: {
           task_definition_arn: task_definition_arn,
           task_count: @task_count,
+          network_configuration: @network_configuration,
+          platform_version: @platform_version,
+          group: @group,
         },
       }
-      if @network_configuration
-        target[:ecs_parameters].merge!(network_configuration: @network_configuration)
-      end
+      target[:ecs_parameters].compact!
 
       if @container_overrides
         target.merge!(input: { containerOverrides: @container_overrides }.to_json)
