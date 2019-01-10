@@ -73,6 +73,7 @@ module EcsDeploy
           task_definition_arn: task_definition_arn,
           task_count: @task_count,
           network_configuration: @network_configuration,
+          launch_type: @launch_type,
           platform_version: @platform_version,
           group: @group,
         },
