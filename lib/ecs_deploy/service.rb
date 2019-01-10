@@ -67,7 +67,7 @@ module EcsDeploy
           placement_strategy: @placement_strategy,
         })
 
-        if EcsDeploy.config.ecs_service_role
+        if @load_balancers && EcsDeploy.config.ecs_service_role
           service_options.merge!({
             role: EcsDeploy.config.ecs_service_role,
           })
