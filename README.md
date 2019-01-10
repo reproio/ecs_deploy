@@ -94,7 +94,7 @@ set :ecs_scheduled_tasks, [
   {
     cluster: "default", # Unless this key, use fetch(:ecs_default_cluster)
     rule_name: "schedule_name",
-    schedule_expression: "cron(0 12 * * ? *"),
+    schedule_expression: "cron(0 12 * * ? *)",
     description: "schedule_description", # Optional
     target_id: "task_name", # Unless this key, use task_definition_name
     task_definition_name: "myapp-#{fetch(:rails_env)}",
