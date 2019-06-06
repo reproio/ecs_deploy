@@ -17,6 +17,9 @@ module EcsDeploy
       network_configuration: nil,
       health_check_grace_period_seconds: nil,
       scheduling_strategy: 'REPLICA',
+      enable_ecs_managed_tags: nil,
+      tags: nil,
+      propagate_tags: nil,
       region: nil,
       delete: false
     )
@@ -33,9 +36,13 @@ module EcsDeploy
       @health_check_grace_period_seconds = health_check_grace_period_seconds
       @scheduling_strategy = scheduling_strategy
       @revision = revision
-      region ||= EcsDeploy.config.default_region
+      @enable_ecs_managed_tags = enable_ecs_managed_tags
+      @tags = tags
+      @propagate_tags = propagate_tags
+
       @response = nil
 
+      region ||= EcsDeploy.config.default_region
       @client = region ? Aws::ECS::Client.new(region: region) : Aws::ECS::Client.new
       @region = @client.config.region
 
@@ -65,6 +72,9 @@ module EcsDeploy
           launch_type: @launch_type,
           placement_constraints: @placement_constraints,
           placement_strategy: @placement_strategy,
+          enable_ecs_managed_tags: @enable_ecs_managed_tags,
+          tags: @tags,
+          propagate_tags: @propagate_tags,
         })
 
         if @load_balancers && EcsDeploy.config.ecs_service_role
@@ -90,6 +100,7 @@ module EcsDeploy
 
         service_options.merge!({service: @service_name})
         service_options.merge!({desired_count: @desired_count}) if @desired_count
+        update_tags(@service_name, @tags)
         @response = @client.update_service(service_options)
         EcsDeploy.logger.info "update service [#{@service_name}] [#{@region}] [#{Paint['OK', :green]}]"
       end
@@ -102,6 +113,26 @@ module EcsDeploy
       end
       @client.delete_service(cluster: @cluster, service: @service_name)
       EcsDeploy.logger.info "delete service [#{@service_name}] [#{@region}] [#{Paint['OK', :green]}]"
+    end
+
+    def update_tags(service_name, tags)
+      service_arn = @client.describe_services(services: [service_name]).services.first.service_arn
+      if service_arn.split('/').size == 2 && tags
+        EcsDeploy.logger.warn "#{service_name} doesn't support tagging operations, so tags are ignored. Long arn format must be used for tagging operations."
+        return
+      end
+
+      tags ||= []
+      current_tag_keys = @client.list_tags_for_resource(resource_arn: service_arn).tags.map(&:key)
+      deleted_tag_keys = current_tag_keys - tags.map { |t| t[:key] }
+
+      unless deleted_tag_keys.empty?
+        @client.untag_resource(resource_arn: service_arn, tag_keys: deleted_tag_keys)
+      end
+
+      unless tags.empty?
+        @client.tag_resource(resource_arn: service_arn, tags: tags)
+      end
     end
 
     def wait_running
