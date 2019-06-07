@@ -15,7 +15,8 @@ module EcsDeploy
       task_role_arn: nil,
       execution_role_arn: nil,
       requires_compatibilities: nil,
-      cpu: nil, memory: nil
+      cpu: nil, memory: nil,
+      tags: nil
     )
       @task_definition_name = task_definition_name
       @task_role_arn        = task_role_arn
@@ -37,6 +38,7 @@ module EcsDeploy
       @requires_compatibilities = requires_compatibilities
       @cpu = cpu&.to_s
       @memory = memory&.to_s
+      @tags = tags
 
       @client = region ? Aws::ECS::Client.new(region: region) : Aws::ECS::Client.new
       @region = @client.config.region
@@ -63,6 +65,7 @@ module EcsDeploy
         execution_role_arn: @execution_role_arn,
         requires_compatibilities: @requires_compatibilities,
         cpu: @cpu, memory: @memory,
+        tags: @tags
       })
       EcsDeploy.logger.info "register task definition [#{@task_definition_name}] [#{@region}] [#{Paint['OK', :green]}]"
       res.task_definition

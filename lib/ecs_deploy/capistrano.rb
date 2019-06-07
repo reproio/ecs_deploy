@@ -39,6 +39,7 @@ namespace :ecs do
             requires_compatibilities: t[:requires_compatibilities],
             cpu: t[:cpu],
             memory: t[:memory],
+            tags: t[:tags],
           )
           result = task_definition.register
           ecs_registered_tasks[region][t[:name]] = result
@@ -103,6 +104,9 @@ namespace :ecs do
             network_configuration: service[:network_configuration],
             health_check_grace_period_seconds: service[:health_check_grace_period_seconds],
             delete: service[:delete],
+            enable_ecs_managed_tags: service[:enable_ecs_managed_tags],
+            tags: service[:tags],
+            propagate_tags: service[:propagate_tags],
           }
           service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
           service_options[:placement_constraints] = service[:placement_constraints] if service[:placement_constraints]
