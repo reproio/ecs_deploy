@@ -116,9 +116,11 @@ module EcsDeploy
     end
 
     def update_tags(service_name, tags)
-      service_arn = @client.describe_services(services: [service_name]).services.first.service_arn
-      if service_arn.split('/').size == 2 && tags
-        EcsDeploy.logger.warn "#{service_name} doesn't support tagging operations, so tags are ignored. Long arn format must be used for tagging operations."
+      service_arn = @client.describe_services(cluster: @cluster, services: [service_name]).services.first.service_arn
+      if service_arn.split('/').size == 2
+        if tags
+          EcsDeploy.logger.warn "#{service_name} doesn't support tagging operations, so tags are ignored. Long arn format must be used for tagging operations."
+        end
         return
       end
 
