@@ -71,31 +71,14 @@ module EcsDeploy
       end
 
       def fetch_container_instances_in_cluster
-        arns = []
         cl = client
-        resp = cl.list_container_instances(cluster: cluster)
-        resp.each do |r|
-          arns.concat(r.container_instance_arns)
+        cl.list_container_instances(cluster: cluster).flat_map do |resp|
+          cl.describe_container_instances(cluster: cluster, container_instances: resp.container_instance_arns).container_instances
         end
-
-        chunk_size = 50
-        container_instances = []
-        arns.each_slice(chunk_size) do |arn_chunk|
-          is = cl.describe_container_instances(cluster: cluster, container_instances: arn_chunk).container_instances
-          container_instances.concat(is)
-        end
-
-        container_instances
       end
 
       def fetch_container_instance_arns_in_service
-        arns = []
-        resp = client.list_container_instances(cluster: cluster, filter: "task:group == service:#{name}")
-        resp.each do |r|
-          arns.concat(r.container_instance_arns)
-        end
-
-        arns
+        client.list_container_instances(cluster: cluster, filter: "task:group == service:#{name}").flat_map(&:container_instance_arns)
       end
 
       def deregister_container_instance(container_instance_arn)
