@@ -305,7 +305,9 @@ The following policy is required for the preceding configuration of "repro-api-p
         "ec2:TerminateInstances",
         "ecs:DescribeContainerInstances",
         "ecs:DescribeServices",
+        "ecs:DescribeTasks",
         "ecs:ListContainerInstances",
+        "ecs:ListTasks",
         "ecs:UpdateService"
       ],
       "Resource": "*"
@@ -362,14 +364,16 @@ The following policy is required for the preceding configuration of "repro-worke
       "Effect": "Allow",
       "Action": [
         "cloudwatch:DescribeAlarms",
-        "ec2:ModifySpotFleetRequest",
         "ec2:DescribeInstances",
-        "ec2:TerminateInstances",
-        "ecs:ListContainerInstances",
-        "ecs:DescribeContainerInstances",
-        "ecs:DescribeServices",
         "ec2:DescribeSpotFleetInstances",
         "ec2:DescribeSpotFleetRequests",
+        "ec2:ModifySpotFleetRequest",
+        "ec2:TerminateInstances",
+        "ecs:DescribeContainerInstances",
+        "ecs:DescribeServices",
+        "ecs:DescribeTasks",
+        "ecs:ListContainerInstances",
+        "ecs:ListTasks",
         "ecs:UpdateService"
       ],
       "Resource": "*"

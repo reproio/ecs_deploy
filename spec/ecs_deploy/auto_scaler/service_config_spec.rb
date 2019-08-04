@@ -5,8 +5,8 @@ require "ecs_deploy/auto_scaler/service_config"
 RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
   describe "#adjust_desired_count" do
     before do
-      allow_any_instance_of(Aws::ECS::Client).to receive(:wait_until)
-      allow_any_instance_of(Aws::ECS::Client).to receive(:describe_services).and_return(double(services: [double(desired_count: initial_desired_count)]))
+      allow_any_instance_of(described_class).to receive(:client) { ecs_client }
+      allow(ecs_client).to receive(:describe_services).and_return(double(services: [double(desired_count: initial_desired_count)]))
     end
 
     subject(:service_config) do
@@ -51,6 +51,7 @@ RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
     let(:service_name) { "service_name" }
     let(:default_step) { 1 }
     let(:initial_desired_count) { 1 }
+    let(:ecs_client) { instance_double("Aws::ECS::Client") }
 
     context "when all triggers match" do
       before do
@@ -60,7 +61,7 @@ RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
       end
 
       it "uses the maximum step of upscale triggers" do
-        expect_any_instance_of(Aws::ECS::Client).to receive(:update_service).with(
+        expect(ecs_client).to receive(:update_service).with(
           cluster: service_config.cluster,
           service: service_config.name,
           desired_count: initial_desired_count + 2,
@@ -82,11 +83,15 @@ RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
         let(:initial_desired_count) { 3 }
 
         it "decreases desired_count by the step" do
-          expect_any_instance_of(Aws::ECS::Client).to receive(:update_service).with(
+          expect(ecs_client).to receive(:update_service).with(
             cluster: service_config.cluster,
             service: service_config.name,
             desired_count: initial_desired_count - 2,
           )
+
+          expect(ecs_client).to receive(:wait_until).with(:services_stable, cluster: service_config.cluster, services: [service_config.name])
+          expect(ecs_client).to receive(:list_tasks).and_return([double(task_arns: ["stopping_task_arn"])], [double(task_arns: [])])
+          expect(ecs_client).to receive(:wait_until).with(:tasks_stopped, cluster: service_config.cluster, tasks: ["stopping_task_arn"])
 
           service_config.adjust_desired_count
         end
@@ -96,11 +101,15 @@ RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
         let(:initial_desired_count) { 2 }
 
         it "decreases desired_count to min_task_count" do
-          expect_any_instance_of(Aws::ECS::Client).to receive(:update_service).with(
+          expect(ecs_client).to receive(:update_service).with(
             cluster: service_config.cluster,
             service: service_config.name,
             desired_count: initial_desired_count - 1,
           )
+
+          expect(ecs_client).to receive(:wait_until).with(:services_stable, cluster: service_config.cluster, services: [service_config.name])
+          expect(ecs_client).to receive(:list_tasks).and_return([double(task_arns: ["stopping_task_arn"])], [double(task_arns: [])])
+          expect(ecs_client).to receive(:wait_until).with(:tasks_stopped, cluster: service_config.cluster, tasks: ["stopping_task_arn"])
 
           service_config.adjust_desired_count
         end
