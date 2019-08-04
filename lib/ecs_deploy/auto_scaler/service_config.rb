@@ -9,7 +9,6 @@ module EcsDeploy
     ServiceConfig = Struct.new(*SERVICE_CONFIG_ATTRIBUTES) do
       include ConfigBase
 
-      MAX_DETACHABLE_INSTANCE_COUNT = 20
       MAX_DESCRIBABLE_TASK_COUNT = 100
 
       def initialize(attributes = {}, logger)

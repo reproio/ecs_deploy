@@ -9,6 +9,8 @@ module EcsDeploy
     AutoScalingGroupConfig = Struct.new(:name, :region, :buffer) do
       include ConfigBase
 
+      MAX_DETACHABLE_INSTANCE_COUNT = 20
+
       def update_desired_capacity(required_capacity, service_config)
         detach_and_terminate_orphan_instances(service_config)
 
