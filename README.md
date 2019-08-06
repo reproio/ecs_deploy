@@ -290,7 +290,7 @@ I recommends deploy `ecs_auto_scaler` on ECS too.
 
 ### IAM policy for autoscaler
 
-The following policy is required for the preceding configuration of "repro-api-production" service:
+The following permissions are required for the preceding configuration of "repro-api-production" service:
 
 ```
 {
@@ -303,14 +303,28 @@ The following policy is required for the preceding configuration of "repro-api-p
         "cloudwatch:DescribeAlarms",
         "ec2:DescribeInstances",
         "ec2:TerminateInstances",
-        "ecs:DescribeContainerInstances",
-        "ecs:DescribeServices",
-        "ecs:DescribeTasks",
-        "ecs:ListContainerInstances",
-        "ecs:ListTasks",
-        "ecs:UpdateService"
+        "ecs:ListTasks"
       ],
       "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeServices",
+        "ecs:UpdateService"
+      ],
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-1:<account-id>:service/ecs-cluster/repro-api-production"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeTasks"
+      ],
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-1:<account-id>:task/ecs-cluster/*"
+      ]
     },
     {
       "Effect": "Allow",
@@ -325,7 +339,17 @@ The following policy is required for the preceding configuration of "repro-api-p
     {
       "Effect": "Allow",
       "Action": [
-        "ecs:DeregisterContainerInstance"
+        "ecs:DescribeContainerInstances"
+      ],
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-1:<account-id>:container-instance/ecs-cluster/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DeregisterContainerInstance",
+        "ecs:ListContainerInstances"
       ],
       "Resource": [
         "arn:aws:ecs:ap-northeast-1:<account-id>:cluster/ecs-cluster"
@@ -335,7 +359,7 @@ The following policy is required for the preceding configuration of "repro-api-p
 }
 ```
 
-The following policy is required for the preceding configuration of "repro-worker-production" service:
+The following permissions are required for the preceding configuration of "repro-worker-production" service:
 
 ```
 {
@@ -369,14 +393,46 @@ The following policy is required for the preceding configuration of "repro-worke
         "ec2:DescribeSpotFleetRequests",
         "ec2:ModifySpotFleetRequest",
         "ec2:TerminateInstances",
-        "ecs:DescribeContainerInstances",
-        "ecs:DescribeServices",
-        "ecs:DescribeTasks",
-        "ecs:ListContainerInstances",
-        "ecs:ListTasks",
-        "ecs:UpdateService"
+        "ecs:ListTasks"
       ],
       "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeServices",
+        "ecs:UpdateService"
+      ],
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-1:<account-id>:service/ecs-cluster-for-worker/repro-worker-production"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeTasks"
+      ],
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-1:<account-id>:task/ecs-cluster-for-worker/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeContainerInstances"
+      ],
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-1:<account-id>:container-instance/ecs-cluster-for-worker/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:ListContainerInstances"
+      ],
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-1:<account-id>:cluster/ecs-cluster-for-worker"
+      ]
     }
   ]
 }
