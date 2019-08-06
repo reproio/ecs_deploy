@@ -359,6 +359,35 @@ The following permissions are required for the preceding configuration of "repro
 }
 ```
 
+If you use spot instances, additional permissions are required like below:
+
+```
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "ecs:UpdateContainerInstancesState",
+      "Resource": "*",
+      "Condition": {
+        "ArnEquals": {
+          "ecs:cluster": "arn:aws:ecs:ap-northeast-1:<account-id>:cluster/ecs-cluster"
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sqs:DeleteMessage",
+        "sqs:DeleteMessageBatch",
+        "sqs:ReceiveMessage"
+      ],
+      "Resource": "arn:aws:sqs:ap-northeast-1:<account-id>:spot-instance-intrp-warns"
+    }
+  ]
+}
+```
+
 The following permissions are required for the preceding configuration of "repro-worker-production" service:
 
 ```
