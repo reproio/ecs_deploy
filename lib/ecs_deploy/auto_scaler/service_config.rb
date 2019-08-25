@@ -178,7 +178,6 @@ module EcsDeploy
         self.desired_count = next_desired_count
         @logger.info "Update service \"#{name}\": desired_count -> #{next_desired_count}"
       rescue => e
-        pp e
         AutoScaler.error_logger.error(e)
       end
 
