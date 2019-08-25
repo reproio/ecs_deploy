@@ -290,7 +290,7 @@ I recommends deploy `ecs_auto_scaler` on ECS too.
 
 ### IAM policy for autoscaler
 
-The following policy is required for the preceding configuration of "repro-api-production" service:
+The following permissions are required for the preceding configuration of "repro-api-production" service:
 
 ```
 {
@@ -303,12 +303,28 @@ The following policy is required for the preceding configuration of "repro-api-p
         "cloudwatch:DescribeAlarms",
         "ec2:DescribeInstances",
         "ec2:TerminateInstances",
-        "ecs:DescribeContainerInstances",
-        "ecs:DescribeServices",
-        "ecs:ListContainerInstances",
-        "ecs:UpdateService"
+        "ecs:ListTasks"
       ],
       "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeServices",
+        "ecs:UpdateService"
+      ],
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-1:<account-id>:service/ecs-cluster/repro-api-production"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeTasks"
+      ],
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-1:<account-id>:task/ecs-cluster/*"
+      ]
     },
     {
       "Effect": "Allow",
@@ -323,7 +339,17 @@ The following policy is required for the preceding configuration of "repro-api-p
     {
       "Effect": "Allow",
       "Action": [
-        "ecs:DeregisterContainerInstance"
+        "ecs:DescribeContainerInstances"
+      ],
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-1:<account-id>:container-instance/ecs-cluster/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DeregisterContainerInstance",
+        "ecs:ListContainerInstances"
       ],
       "Resource": [
         "arn:aws:ecs:ap-northeast-1:<account-id>:cluster/ecs-cluster"
@@ -333,7 +359,36 @@ The following policy is required for the preceding configuration of "repro-api-p
 }
 ```
 
-The following policy is required for the preceding configuration of "repro-worker-production" service:
+If you use spot instances, additional permissions are required like below:
+
+```
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "ecs:UpdateContainerInstancesState",
+      "Resource": "*",
+      "Condition": {
+        "ArnEquals": {
+          "ecs:cluster": "arn:aws:ecs:ap-northeast-1:<account-id>:cluster/ecs-cluster"
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sqs:DeleteMessage",
+        "sqs:DeleteMessageBatch",
+        "sqs:ReceiveMessage"
+      ],
+      "Resource": "arn:aws:sqs:ap-northeast-1:<account-id>:spot-instance-intrp-warns"
+    }
+  ]
+}
+```
+
+The following permissions are required for the preceding configuration of "repro-worker-production" service:
 
 ```
 {
@@ -362,17 +417,51 @@ The following policy is required for the preceding configuration of "repro-worke
       "Effect": "Allow",
       "Action": [
         "cloudwatch:DescribeAlarms",
-        "ec2:ModifySpotFleetRequest",
         "ec2:DescribeInstances",
-        "ec2:TerminateInstances",
-        "ecs:ListContainerInstances",
-        "ecs:DescribeContainerInstances",
-        "ecs:DescribeServices",
         "ec2:DescribeSpotFleetInstances",
         "ec2:DescribeSpotFleetRequests",
-        "ecs:UpdateService"
+        "ec2:ModifySpotFleetRequest",
+        "ec2:TerminateInstances",
+        "ecs:ListTasks"
       ],
       "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeServices",
+        "ecs:UpdateService"
+      ],
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-1:<account-id>:service/ecs-cluster-for-worker/repro-worker-production"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeTasks"
+      ],
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-1:<account-id>:task/ecs-cluster-for-worker/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeContainerInstances"
+      ],
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-1:<account-id>:container-instance/ecs-cluster-for-worker/*"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:ListContainerInstances"
+      ],
+      "Resource": [
+        "arn:aws:ecs:ap-northeast-1:<account-id>:cluster/ecs-cluster-for-worker"
+      ]
     }
   ]
 }

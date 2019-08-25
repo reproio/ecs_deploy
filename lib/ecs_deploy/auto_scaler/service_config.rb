@@ -9,7 +9,7 @@ module EcsDeploy
     ServiceConfig = Struct.new(*SERVICE_CONFIG_ATTRIBUTES) do
       include ConfigBase
 
-      MAX_DETACHABLE_INSTANCE_COUNT = 20
+      MAX_DESCRIBABLE_TASK_COUNT = 100
 
       def initialize(attributes = {}, logger)
         super
@@ -171,23 +171,44 @@ module EcsDeploy
           @logger.info "Service \"#{name}\" clears cooldown state"
         end
 
-        cl = client
         next_desired_count = [next_desired_count, max_task_count[level]].min
-        cl.update_service(
-          cluster: cluster,
-          service: name,
-          desired_count: next_desired_count,
-        )
-        cl.wait_until(:services_stable, cluster: cluster, services: [name]) do |w|
-          w.before_wait do
-            @logger.debug "wait service stable [#{name}]"
-          end
-        end if difference < 0
+        update_service_desired_count(next_desired_count)
+
         @last_updated_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
         self.desired_count = next_desired_count
         @logger.info "Update service \"#{name}\": desired_count -> #{next_desired_count}"
       rescue => e
         AutoScaler.error_logger.error(e)
+      end
+
+      def update_service_desired_count(next_desired_count)
+        cl = client
+        if next_desired_count < desired_count
+          running_task_arns = cl.list_tasks(cluster: cluster, service_name: name, desired_status: "RUNNING").flat_map(&:task_arns)
+        end
+
+        cl.update_service(
+          cluster: cluster,
+          service: name,
+          desired_count: next_desired_count,
+        )
+
+        return if next_desired_count >= desired_count
+
+        cl.wait_until(:services_stable, cluster: cluster, services: [name]) do |w|
+          w.before_wait do
+            @logger.debug "wait service stable [#{name}]"
+          end
+        end
+
+        stopping_task_arns = running_task_arns - cl.list_tasks(cluster: cluster, service_name: name, desired_status: "RUNNING").flat_map(&:task_arns)
+        stopping_task_arns.each_slice(MAX_DESCRIBABLE_TASK_COUNT) do |arns|
+          cl.wait_until(:tasks_stopped, cluster: cluster, tasks: arns) do |w|
+            w.before_wait do
+              @logger.debug "wait stopping tasks stopped [#{name}]"
+            end
+          end
+        end
       end
 
       def max_task_level(count)
