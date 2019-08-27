@@ -105,7 +105,7 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
         end
       end
 
-      context "when there are deregistable instances only in one availability zone" do
+      context "when there are deregisterable instances only in one availability zone where there are fewer instances" do
         let(:container_instances) do
           [
             Aws::ECS::Types::ContainerInstance.new(
@@ -139,7 +139,7 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
           ])
         end
 
-        it "dosen't terminates any instancess" do
+        it "dosen't terminates any instances" do
           expect(auto_scaling_group_config).to receive(:detach_and_terminate_orphan_instances).with(service_config)
           expect(service_config).to_not receive(:deregister_container_instance)
           expect_any_instance_of(Aws::AutoScaling::Client).to_not receive(:detach_instances)
