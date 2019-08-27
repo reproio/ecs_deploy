@@ -21,29 +21,7 @@ module EcsDeploy
         }).auto_scaling_groups[0]
 
         if current_asg.desired_capacity > desired_capacity
-          diff = current_asg.desired_capacity - desired_capacity
-          container_instance_arns_in_service = service_config.fetch_container_instance_arns_in_service
-          container_instances_in_cluster = service_config.fetch_container_instances_in_cluster
-          deregisterable_instances = container_instances_in_cluster.select do |i|
-            i.pending_tasks_count == 0 && !running_essential_task?(i, container_instance_arns_in_service)
-          end
-
-          @logger.info "Fetch deregisterable instances: #{deregisterable_instances.map(&:ec2_instance_id).inspect}"
-
-          deregistered_instance_ids = []
-          deregisterable_instances.each do |i|
-            break if deregistered_instance_ids.size >= diff
-            begin
-              service_config.deregister_container_instance(i.container_instance_arn)
-              deregistered_instance_ids << i.ec2_instance_id
-            rescue Aws::ECS::Errors::InvalidParameterException
-            end
-          end
-
-          @logger.info "Deregistered instances: #{deregistered_instance_ids.inspect}"
-
-          detach_and_terminate_instances(deregistered_instance_ids)
-
+          decrease_desired_capacity(service_config, current_asg.desired_capacity - desired_capacity)
           @logger.info "Update auto scaling group \"#{name}\": desired_capacity -> #{desired_capacity}"
         elsif current_asg.desired_capacity < desired_capacity
           client.update_auto_scaling_group(
@@ -59,6 +37,47 @@ module EcsDeploy
       end
 
       private
+
+      def decrease_desired_capacity(service_config, count)
+        container_instance_arns_in_service = service_config.fetch_container_instance_arns_in_service
+        container_instances_in_cluster = service_config.fetch_container_instances_in_cluster
+        deregisterable_instances = container_instances_in_cluster.select do |i|
+          i.pending_tasks_count == 0 && !running_essential_task?(i, container_instance_arns_in_service)
+        end
+
+        @logger.info "Fetch deregisterable instances: #{deregisterable_instances.map(&:ec2_instance_id).inspect}"
+
+        az_to_instance_count = instances(reload: true).each_with_object(Hash.new(0)) { |i, h| h[i.availability_zone] += 1 }
+        az_to_deregisterable_instances = deregisterable_instances.group_by do |i|
+          i.attributes.find { |a| a.name == "ecs.availability-zone" }.value
+        end
+
+        deregistered_instance_ids = []
+        prev_max_count = nil
+        # Select instances to be deregistered keeping the balance of instance count per availability zone
+        while deregistered_instance_ids.size < count
+          max_count = az_to_instance_count.each_value.max
+          break if max_count == prev_max_count # No more deregistable instances with keeping the balance
+
+          azs = az_to_instance_count.select { |_, c| c == max_count }.keys
+          azs.each do |az|
+            instance = az_to_deregisterable_instances[az]&.pop
+            next if instance.nil?
+            begin
+              service_config.deregister_container_instance(instance.container_instance_arn)
+              deregistered_instance_ids << instance.ec2_instance_id
+              az_to_instance_count[az] -= 1
+            rescue Aws::ECS::Errors::InvalidParameterException
+            end
+            break if deregistered_instance_ids.size >= count
+          end
+          prev_max_count = max_count
+        end
+
+        @logger.info "Deregistered instances: #{deregistered_instance_ids.inspect}"
+
+        detach_and_terminate_instances(deregistered_instance_ids)
+      end
 
       def detach_and_terminate_instances(instance_ids)
         return if instance_ids.empty?
