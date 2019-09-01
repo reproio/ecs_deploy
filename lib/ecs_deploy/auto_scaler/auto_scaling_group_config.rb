@@ -1,27 +1,36 @@
 require "aws-sdk-autoscaling"
 require "aws-sdk-ec2"
-require "aws-sdk-ecs"
 require "ecs_deploy"
 require "ecs_deploy/auto_scaler/config_base"
+require "ecs_deploy/auto_scaler/cluster_resource_manager"
 
 module EcsDeploy
   module AutoScaler
-    AutoScalingGroupConfig = Struct.new(:name, :region, :buffer) do
+    AutoScalingGroupConfig = Struct.new(:name, :region, :cluster, :buffer, :service_configs) do
       include ConfigBase
 
       MAX_DETACHABLE_INSTANCE_COUNT = 20
 
-      def update_desired_capacity(required_capacity, service_config)
-        detach_and_terminate_orphan_instances(service_config)
+      def initialize(attributes = {}, logger)
+        attributes = attributes.dup
+        services = attributes.delete("services")
+        super(attributes, logger)
+        self.service_configs = services.map do |s|
+          ServiceConfig.new(s.merge("cluster" => cluster, "region" => region), logger)
+        end
+      end
 
-        desired_capacity = (required_capacity + buffer.to_f).ceil
+      def update_desired_capacity
+        detach_and_terminate_orphan_instances
+
+        desired_capacity = cluster_resource_manager.desired_capacity
 
         current_asg = client.describe_auto_scaling_groups({
           auto_scaling_group_names: [name],
         }).auto_scaling_groups[0]
 
         if current_asg.desired_capacity > desired_capacity
-          decrease_desired_capacity(service_config, current_asg.desired_capacity - desired_capacity)
+          decrease_desired_capacity(current_asg.desired_capacity - desired_capacity)
           @logger.info "Update auto scaling group \"#{name}\": desired_capacity -> #{desired_capacity}"
         elsif current_asg.desired_capacity < desired_capacity
           client.update_auto_scaling_group(
@@ -36,11 +45,20 @@ module EcsDeploy
         AutoScaler.error_logger.error(e)
       end
 
+      def cluster_resource_manager
+        @cluster_resource_manager ||= EcsDeploy::AutoScaler::ClusterResourceManager.new(
+          region: region,
+          cluster: cluster,
+          buffer: buffer,
+          service_configs: service_configs,
+        )
+      end
+
       private
 
-      def decrease_desired_capacity(service_config, count)
-        container_instance_arns_in_service = service_config.fetch_container_instance_arns_in_service
-        container_instances_in_cluster = service_config.fetch_container_instances_in_cluster
+      def decrease_desired_capacity(count)
+        container_instance_arns_in_service = cluster_resource_manager.fetch_container_instance_arns_in_service
+        container_instances_in_cluster = cluster_resource_manager.fetch_container_instances_in_cluster
         deregisterable_instances = container_instances_in_cluster.select do |i|
           i.pending_tasks_count == 0 && !running_essential_task?(i, container_instance_arns_in_service)
         end
@@ -64,10 +82,10 @@ module EcsDeploy
             instance = az_to_deregisterable_instances[az]&.pop
             next if instance.nil?
             begin
-              service_config.deregister_container_instance(instance.container_instance_arn)
+              cluster_resource_manager.deregister_container_instance(instance.container_instance_arn)
               deregistered_instance_ids << instance.ec2_instance_id
               az_to_instance_count[az] -= 1
-            rescue Aws::ECS::Errors::InvalidParameterException
+            rescue EcsDeploy::AutoScaler::ClusterResourceManager::DeregisterContainerInstanceFailed
             end
             break if deregistered_instance_ids.size >= count
           end
@@ -100,8 +118,8 @@ module EcsDeploy
         AutoScaler.error_logger.error(e)
       end
 
-      def detach_and_terminate_orphan_instances(service_config)
-        container_instance_ids = service_config.fetch_container_instances_in_cluster.map(&:ec2_instance_id)
+      def detach_and_terminate_orphan_instances
+        container_instance_ids = cluster_resource_manager.fetch_container_instances_in_cluster.map(&:ec2_instance_id)
         orphans = instances(reload: true).reject { |i| container_instance_ids.include?(i.instance_id) }.map(&:instance_id)
 
         return if orphans.empty?

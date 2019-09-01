@@ -5,20 +5,30 @@ require "aws-sdk-ec2"
 require "aws-sdk-ecs"
 require "ecs_deploy"
 require "ecs_deploy/auto_scaler/config_base"
+require "ecs_deploy/auto_scaler/cluster_resource_manager"
 
 module EcsDeploy
   module AutoScaler
-    SpotFleetRequestConfig = Struct.new(:id, :region, :buffer) do
+    SpotFleetRequestConfig = Struct.new(:id, :region, :cluster, :buffer, :service_configs) do
       include ConfigBase
+
+      def initialize(attributes = {}, logger)
+        attributes = attributes.dup
+        services = attributes.delete("services")
+        super(attributes, logger)
+        self.service_configs = services.map do |s|
+          ServiceConfig.new(s.merge("cluster" => cluster, "region" => region), logger)
+        end
+      end
 
       def name
         id
       end
 
-      def update_desired_capacity(required_capacity, service_config)
-        terminate_orphan_instances(service_config)
+      def update_desired_capacity
+        terminate_orphan_instances
 
-        desired_capacity = (required_capacity + buffer.to_f).ceil
+        desired_capacity = cluster_resource_manager.desired_capacity
 
         request_config = ec2_client.describe_spot_fleet_requests(
           spot_fleet_request_ids: [id]
@@ -28,15 +38,26 @@ module EcsDeploy
 
         ec2_client.modify_spot_fleet_request(spot_fleet_request_id: id, target_capacity: desired_capacity)
         if desired_capacity < request_config.target_capacity
-          wait_for_capacity_decrease(service_config.cluster, request_config.target_capacity - desired_capacity)
+          wait_for_capacity_decrease(cluster, request_config.target_capacity - desired_capacity)
         end
         @logger.info "Update spot fleet request \"#{id}\": desired_capacity -> #{desired_capacity}"
       rescue => e
         AutoScaler.error_logger.error(e)
       end
 
-      def terminate_orphan_instances(service_config)
-        container_instance_ids = service_config.fetch_container_instances_in_cluster.map(&:ec2_instance_id)
+      def cluster_resource_manager
+        @cluster_resource_manager ||= EcsDeploy::AutoScaler::ClusterResourceManager.new(
+          region: region,
+          cluster: cluster,
+          buffer: buffer,
+          service_configs: service_configs,
+        )
+      end
+
+      private
+
+      def terminate_orphan_instances
+        container_instance_ids = cluster_resource_manager.fetch_container_instances_in_cluster.map(&:ec2_instance_id)
         spot_fleet_instances = ec2_client.describe_spot_fleet_instances(spot_fleet_request_id: id).active_instances
         orphans = spot_fleet_instances.reject { |i| container_instance_ids.include?(i.instance_id) }.map(&:instance_id)
 
@@ -59,8 +80,6 @@ module EcsDeploy
       rescue => e
         AutoScaler.error_logger.error(e)
       end
-
-      private
 
       def ec2_client
         Aws::EC2::Client.new(

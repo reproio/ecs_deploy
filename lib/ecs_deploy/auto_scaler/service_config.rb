@@ -5,7 +5,7 @@ require "ecs_deploy/auto_scaler/trigger_config"
 
 module EcsDeploy
   module AutoScaler
-    SERVICE_CONFIG_ATTRIBUTES = %i(name cluster region auto_scaling_group_name spot_fleet_request_id step max_task_count min_task_count idle_time scheduled_min_task_count cooldown_time_for_reach_max upscale_triggers downscale_triggers desired_count required_capacity)
+    SERVICE_CONFIG_ATTRIBUTES = %i(name cluster region step max_task_count min_task_count idle_time scheduled_min_task_count cooldown_time_for_reach_max upscale_triggers downscale_triggers desired_count required_capacity)
     ServiceConfig = Struct.new(*SERVICE_CONFIG_ATTRIBUTES) do
       include ConfigBase
 
@@ -13,9 +13,6 @@ module EcsDeploy
 
       def initialize(attributes = {}, logger)
         super
-        if auto_scaling_group_name && spot_fleet_request_id
-          raise ArgumentError, "You can specify only one of 'auto_scaling_group_name' or 'spot_fleet_request_name'"
-        end
         self.idle_time ||= 60
         self.max_task_count = Array(max_task_count)
         self.upscale_triggers = upscale_triggers.to_a.map do |t|
@@ -68,21 +65,6 @@ module EcsDeploy
         if difference != 0
           update_service(difference)
         end
-      end
-
-      def fetch_container_instances_in_cluster
-        cl = client
-        cl.list_container_instances(cluster: cluster).flat_map do |resp|
-          cl.describe_container_instances(cluster: cluster, container_instances: resp.container_instance_arns).container_instances
-        end
-      end
-
-      def fetch_container_instance_arns_in_service
-        client.list_container_instances(cluster: cluster, filter: "task:group == service:#{name}").flat_map(&:container_instance_arns)
-      end
-
-      def deregister_container_instance(container_instance_arn)
-        client.deregister_container_instance(cluster: cluster, container_instance: container_instance_arn, force: true)
       end
 
       private
