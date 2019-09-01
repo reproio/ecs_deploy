@@ -262,6 +262,8 @@ services:
     idle_time: 240
     cooldown_time_for_reach_max: 600
     min_task_count: 0
+    # Required capacity per task (default: 1)
+    # The capacity assumes that WeightedCapacity is equal to the number of vCPUs.
     required_capacity: 2
     upscale_triggers:
       - alarm_name: "ECS [repro-worker-production] CPUUtilization"
