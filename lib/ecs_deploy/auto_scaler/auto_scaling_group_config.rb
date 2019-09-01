@@ -51,6 +51,8 @@ module EcsDeploy
           cluster: cluster,
           buffer: buffer,
           service_configs: service_configs,
+          capacity_based_on: "instances",
+          logger: @logger,
         )
       end
 

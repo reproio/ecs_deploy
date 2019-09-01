@@ -38,7 +38,7 @@ module EcsDeploy
 
         ec2_client.modify_spot_fleet_request(spot_fleet_request_id: id, target_capacity: desired_capacity)
         if desired_capacity < request_config.target_capacity
-          wait_for_capacity_decrease(cluster, request_config.target_capacity - desired_capacity)
+          wait_for_capacity_decrease(request_config.target_capacity - desired_capacity)
         end
         @logger.info "Update spot fleet request \"#{id}\": desired_capacity -> #{desired_capacity}"
       rescue => e
@@ -51,6 +51,8 @@ module EcsDeploy
           cluster: cluster,
           buffer: buffer,
           service_configs: service_configs,
+          capacity_based_on: "vCPUs",
+          logger: @logger,
         )
       end
 
@@ -99,30 +101,17 @@ module EcsDeploy
         )
       end
 
-      def wait_for_capacity_decrease(cluster, capacity)
-        initial_capacity = calculate_active_instance_capacity(cluster)
-        @logger.info "Wait for the capacity of active instances becoming #{initial_capacity - capacity} from #{initial_capacity}"
+      def wait_for_capacity_decrease(capacity)
+        initial_capacity = @cluster_resource_manager.calculate_active_instance_capacity
+        @logger.info "Wait for the capacity of active instances to become #{initial_capacity - capacity} from #{initial_capacity}"
         Timeout.timeout(180) do
           loop do
-            break if calculate_active_instance_capacity(cluster) <= initial_capacity - capacity
+            break if @cluster_resource_manager.calculate_active_instance_capacity <= initial_capacity - capacity
             sleep 5
           end
         end
       rescue Timeout::Error => e
         AutoScaler.error_logger.warn("`#{__method__}': #{e} (#{e.class})")
-      end
-
-      def calculate_active_instance_capacity(cluster)
-        cl = ecs_client
-        total_cpu = cl.list_container_instances(cluster: cluster, status: "ACTIVE").sum do |resp|
-          next 0 if resp.container_instance_arns.empty?
-          ecs_client.describe_container_instances(
-            cluster: cluster,
-            container_instances: resp.container_instance_arns,
-          ).container_instances.sum { |ci| ci.registered_resources.find { |r| r.name == "CPU" }.integer_value }
-        end
-
-        total_cpu / 1024
       end
     end
   end

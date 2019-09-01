@@ -51,7 +51,7 @@ module EcsDeploy
           ths = cluster_scaling_config.service_configs.map do |service_config|
             Thread.new(service_config) do |s|
               @logger.debug "Start service scaling of #{s.name}"
-              s.adjust_desired_count
+              s.adjust_desired_count(cluster_scaling_config.cluster_resource_manager)
             end
           end
           ths.each { |th| th.abort_on_exception = true }
@@ -61,6 +61,8 @@ module EcsDeploy
           @logger.debug "Start cluster scaling of #{cluster_scaling_config.name}"
 
           cluster_scaling_config.update_desired_capacity
+
+          cluster_scaling_config.service_configs.each(&:wait_until_desired_count_updated)
         end
       end
 

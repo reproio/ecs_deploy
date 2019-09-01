@@ -53,6 +53,8 @@ RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
     let(:initial_desired_count) { 1 }
     let(:ecs_client) { instance_double("Aws::ECS::Client") }
 
+    let(:cluster_resource_manager) { instance_double("EcsDeploy::AutoScaler::ClusterResourceManager", acquire: nil) }
+
     context "when all triggers match" do
       before do
         (service_config.upscale_triggers + service_config.downscale_triggers).each do |trigger|
@@ -64,10 +66,16 @@ RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
         expect(ecs_client).to receive(:update_service).with(
           cluster: service_config.cluster,
           service: service_config.name,
+          desired_count: initial_desired_count + 1,
+        )
+        expect(ecs_client).to receive(:update_service).with(
+          cluster: service_config.cluster,
+          service: service_config.name,
           desired_count: initial_desired_count + 2,
         )
 
-        service_config.adjust_desired_count
+        service_config.adjust_desired_count(cluster_resource_manager)
+        service_config.wait_until_desired_count_updated
       end
     end
 
@@ -93,7 +101,7 @@ RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
           expect(ecs_client).to receive(:list_tasks).and_return([double(task_arns: ["stopping_task_arn"])], [double(task_arns: [])])
           expect(ecs_client).to receive(:wait_until).with(:tasks_stopped, cluster: service_config.cluster, tasks: ["stopping_task_arn"])
 
-          service_config.adjust_desired_count
+          service_config.adjust_desired_count(cluster_resource_manager)
         end
       end
 
@@ -111,7 +119,7 @@ RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
           expect(ecs_client).to receive(:list_tasks).and_return([double(task_arns: ["stopping_task_arn"])], [double(task_arns: [])])
           expect(ecs_client).to receive(:wait_until).with(:tasks_stopped, cluster: service_config.cluster, tasks: ["stopping_task_arn"])
 
-          service_config.adjust_desired_count
+          service_config.adjust_desired_count(cluster_resource_manager)
         end
       end
     end

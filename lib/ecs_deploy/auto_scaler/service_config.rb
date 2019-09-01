@@ -11,6 +11,8 @@ module EcsDeploy
 
       MAX_DESCRIBABLE_TASK_COUNT = 100
 
+      attr_reader :updated_desired_count
+
       def initialize(attributes = {}, logger)
         super
         self.idle_time ||= 60
@@ -23,13 +25,14 @@ module EcsDeploy
         end
         self.max_task_count.sort!
         self.desired_count = fetch_service.desired_count
+        @updated_desired_count = desired_count
         self.required_capacity ||= 1
         @reach_max_at = nil
         @last_updated_at = nil
         @logger = logger
       end
 
-      def adjust_desired_count
+      def adjust_desired_count(cluster_resource_manager)
         if idle?
           @logger.debug "#{name} is idling"
           return
@@ -63,8 +66,16 @@ module EcsDeploy
         end
 
         if difference != 0
-          update_service(difference)
+          update_service(difference, cluster_resource_manager)
         end
+      end
+
+      def wait_until_desired_count_updated
+        @increase_desired_count_thread&.join
+      rescue => e
+        AutoScaler.error_logger.warn("`#{__method__}': #{e} (#{e.class})")
+      ensure
+        @increase_desired_count_thread = nil
       end
 
       private
@@ -108,7 +119,7 @@ module EcsDeploy
         AutoScaler.error_logger.error(e)
       end
 
-      def update_service(difference)
+      def update_service(difference, cluster_resource_manager)
         next_desired_count = desired_count + difference
         current_level = max_task_level(desired_count)
         next_level = max_task_level(next_desired_count)
@@ -137,28 +148,44 @@ module EcsDeploy
         end
 
         next_desired_count = [next_desired_count, max_task_count[level]].min
-        update_service_desired_count(next_desired_count)
+        if next_desired_count > desired_count
+          increase_desired_count(next_desired_count - desired_count, cluster_resource_manager)
+        else
+          decrease_desired_count(desired_count - next_desired_count)
+        end
 
         @last_updated_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
-        self.desired_count = next_desired_count
         @logger.info "Update service \"#{name}\": desired_count -> #{next_desired_count}"
       rescue => e
         AutoScaler.error_logger.error(e)
       end
 
-      def update_service_desired_count(next_desired_count)
-        cl = client
-        if next_desired_count < desired_count
-          running_task_arns = cl.list_tasks(cluster: cluster, service_name: name, desired_status: "RUNNING").flat_map(&:task_arns)
+      def increase_desired_count(by, cluster_resource_manager)
+        self.desired_count += by
+
+        @increase_desired_count_thread = Thread.new do
+          cl = client
+          by.times do
+            cluster_resource_manager.acquire(required_capacity)
+            cl.update_service(
+              cluster: cluster,
+              service: name,
+              desired_count: @updated_desired_count + 1,
+            )
+            @updated_desired_count += 1
+          end
         end
+      end
+
+      def decrease_desired_count(by)
+        cl = client
+        running_task_arns = cl.list_tasks(cluster: cluster, service_name: name, desired_status: "RUNNING").flat_map(&:task_arns)
 
         cl.update_service(
           cluster: cluster,
           service: name,
-          desired_count: next_desired_count,
+          desired_count: desired_count - by,
         )
-
-        return if next_desired_count >= desired_count
 
         cl.wait_until(:services_stable, cluster: cluster, services: [name]) do |w|
           w.before_wait do
@@ -174,6 +201,9 @@ module EcsDeploy
             end
           end
         end
+
+        self.desired_count -= by
+        @updated_desired_count = desired_count
       end
 
       def max_task_level(count)
