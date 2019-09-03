@@ -67,8 +67,13 @@ module EcsDeploy
 
       def fetch_container_instances_in_cluster
         cl = ecs_client
-        cl.list_container_instances(cluster: @cluster).flat_map do |resp|
-          cl.describe_container_instances(cluster: @cluster, container_instances: resp.container_instance_arns).container_instances
+        resp = cl.list_container_instances(cluster: @cluster)
+        if resp.container_instance_arns.empty?
+          []
+        else
+          resp.flat_map do |resp|
+            cl.describe_container_instances(cluster: @cluster, container_instances: resp.container_instance_arns).container_instances
+          end
         end
       end
 
