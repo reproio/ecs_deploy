@@ -60,7 +60,8 @@ module EcsDeploy
 
           @logger.debug "Start cluster scaling of #{cluster_scaling_config.name}"
 
-          cluster_scaling_config.update_desired_capacity
+          required_capacity = cluster_scaling_config.service_configs.sum { |s| s.desired_count * s.required_capacity }
+          cluster_scaling_config.update_desired_capacity(required_capacity)
 
           cluster_scaling_config.service_configs.each(&:wait_until_desired_count_updated)
         end

@@ -20,18 +20,24 @@ module EcsDeploy
         end
       end
 
-      def update_desired_capacity
+      def update_desired_capacity(required_capacity)
         detach_and_terminate_orphan_instances
 
-        desired_capacity = cluster_resource_manager.desired_capacity
+        desired_capacity = (required_capacity + buffer.to_f).ceil
 
         current_asg = client.describe_auto_scaling_groups({
           auto_scaling_group_names: [name],
         }).auto_scaling_groups[0]
 
         if current_asg.desired_capacity > desired_capacity
-          decrease_desired_capacity(current_asg.desired_capacity - desired_capacity)
-          @logger.info "Update auto scaling group \"#{name}\": desired_capacity -> #{desired_capacity}"
+          decreased_capacity = decrease_desired_capacity(current_asg.desired_capacity - desired_capacity)
+          if decreased_capacity > 0
+            new_desired_capacity = current_asg.desired_capacity - decreased_capacity
+            cluster_resource_manager.trigger_capacity_update(current_asg.desired_capacity, new_desired_capacity)
+            @logger.info "Update auto scaling group \"#{name}\": desired_capacity -> #{new_desired_capacity}"
+          else
+            @logger.info "Tried to Update auto scaling group \"#{name}\" but there were no deregisterable instances"
+          end
         elsif current_asg.desired_capacity < desired_capacity
           client.update_auto_scaling_group(
             auto_scaling_group_name: name,
@@ -39,6 +45,7 @@ module EcsDeploy
             max_size: [current_asg.max_size, desired_capacity].max,
             desired_capacity: desired_capacity,
           )
+          cluster_resource_manager.trigger_capacity_update(current_asg.desired_capacity, desired_capacity)
           @logger.info "Update auto scaling group \"#{name}\": desired_capacity -> #{desired_capacity}"
         end
       rescue => e
@@ -49,7 +56,6 @@ module EcsDeploy
         @cluster_resource_manager ||= EcsDeploy::AutoScaler::ClusterResourceManager.new(
           region: region,
           cluster: cluster,
-          buffer: buffer,
           service_configs: service_configs,
           capacity_based_on: "instances",
           logger: @logger,
@@ -97,6 +103,8 @@ module EcsDeploy
         @logger.info "Deregistered instances: #{deregistered_instance_ids.inspect}"
 
         detach_and_terminate_instances(deregistered_instance_ids)
+
+        deregistered_instance_ids.size
       end
 
       def detach_and_terminate_instances(instance_ids)

@@ -53,7 +53,7 @@ RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
     let(:initial_desired_count) { 1 }
     let(:ecs_client) { instance_double("Aws::ECS::Client") }
 
-    let(:cluster_resource_manager) { instance_double("EcsDeploy::AutoScaler::ClusterResourceManager", acquire: nil) }
+    let(:cluster_resource_manager) { instance_double("EcsDeploy::AutoScaler::ClusterResourceManager") }
 
     context "when all triggers match" do
       before do
@@ -63,6 +63,7 @@ RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
       end
 
       it "uses the maximum step of upscale triggers" do
+        expect(cluster_resource_manager).to receive(:acquire).with(1, timeout: kind_of(Float)).twice { true }
         expect(ecs_client).to receive(:update_service).with(
           cluster: service_config.cluster,
           service: service_config.name,
@@ -91,6 +92,7 @@ RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
         let(:initial_desired_count) { 3 }
 
         it "decreases desired_count by the step" do
+          expect(cluster_resource_manager).to receive(:release).with(2)
           expect(ecs_client).to receive(:update_service).with(
             cluster: service_config.cluster,
             service: service_config.name,
@@ -109,6 +111,7 @@ RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
         let(:initial_desired_count) { 2 }
 
         it "decreases desired_count to min_task_count" do
+          expect(cluster_resource_manager).to receive(:release).with(1)
           expect(ecs_client).to receive(:update_service).with(
             cluster: service_config.cluster,
             service: service_config.name,

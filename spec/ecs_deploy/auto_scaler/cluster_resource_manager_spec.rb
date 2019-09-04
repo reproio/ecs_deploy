@@ -9,7 +9,6 @@ RSpec.describe EcsDeploy::AutoScaler::ClusterResourceManager do
       cluster: "cluster",
       service_configs: service_configs,
       capacity_based_on: capacity_based_on,
-      update_remaining_capacity_interval: 0.1,
     )
   end
   let(:service_configs) { [] }
@@ -18,31 +17,26 @@ RSpec.describe EcsDeploy::AutoScaler::ClusterResourceManager do
     let(:capacity_based_on) { "instances" }
     let(:service_configs) { [service_config] }
     let(:service_config) do
-      double(name: "service_name", required_capacity: 0.5, desired_count: 6, updated_desired_count: 4)
+      double(name: "service_name", required_capacity: 0.5, desired_count: 4)
     end
 
     before do
-      ecs_client = Aws::ECS::Client.new(stub_responses: true)
       @container_instance_arns = ["arn", "arn"]
-      ecs_client.stub_responses(:list_container_instances, ->(_) {
-        { container_instance_arns: @container_instance_arns }
-      })
-      allow(cluster_resource_manager).to receive(:ecs_client) { ecs_client }
+      Aws.config[:ecs] = {
+        stub_responses: {
+          list_container_instances: ->(_) {
+            { container_instance_arns: @container_instance_arns }
+          }
+        }
+      }
     end
 
     it do
-      expect {
-        Timeout::timeout(0.5) do
-          cluster_resource_manager.acquire(1)
-        end
-      }.to raise_error { Timeout::Error }
+      cluster_resource_manager.trigger_capacity_update(2, 3, interval: 0.1)
 
+      expect(cluster_resource_manager.acquire(1, timeout: 0.5)).to be false
       @container_instance_arns << "arn"
-      expect {
-        Timeout::timeout(0.5) do
-          cluster_resource_manager.acquire(1)
-        end
-      }.to_not raise_error { Timeout::Error }
+      expect(cluster_resource_manager.acquire(1, timeout: 0.5)).to be true
     end
   end
 
@@ -51,11 +45,13 @@ RSpec.describe EcsDeploy::AutoScaler::ClusterResourceManager do
       let(:capacity_based_on) { "instances" }
 
       before do
-        ecs_client = Aws::ECS::Client.new(stub_responses: true)
-        ecs_client.stub_responses(:list_container_instances, {
-          container_instance_arns: %w[arn1 arn2],
-        })
-        allow(cluster_resource_manager).to receive(:ecs_client) { ecs_client }
+        Aws.config[:ecs] = {
+          stub_responses: {
+            list_container_instances: {
+              container_instance_arns: %w[arn1 arn2],
+            }
+          }
+        }
       end
 
       it do

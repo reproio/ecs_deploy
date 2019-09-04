@@ -2,7 +2,6 @@ require "json"
 require "timeout"
 
 require "aws-sdk-ec2"
-require "aws-sdk-ecs"
 require "ecs_deploy"
 require "ecs_deploy/auto_scaler/config_base"
 require "ecs_deploy/auto_scaler/cluster_resource_manager"
@@ -25,10 +24,10 @@ module EcsDeploy
         id
       end
 
-      def update_desired_capacity
+      def update_desired_capacity(required_capacity)
         terminate_orphan_instances
 
-        desired_capacity = cluster_resource_manager.desired_capacity
+        desired_capacity = (required_capacity + buffer.to_f).ceil
 
         request_config = ec2_client.describe_spot_fleet_requests(
           spot_fleet_request_ids: [id]
@@ -37,9 +36,13 @@ module EcsDeploy
         return if desired_capacity == request_config.target_capacity
 
         ec2_client.modify_spot_fleet_request(spot_fleet_request_id: id, target_capacity: desired_capacity)
-        if desired_capacity < request_config.target_capacity
-          wait_for_capacity_decrease(request_config.target_capacity - desired_capacity)
-        end
+
+        cluster_resource_manager.trigger_capacity_update(
+          request_config.target_capacity,
+          desired_capacity,
+          # Wait until the capacity is updated to prevent the process from terminating before container draining is completed
+          wait_until_capacity_updated: desired_capacity < request_config.target_capacity,
+        )
         @logger.info "Update spot fleet request \"#{id}\": desired_capacity -> #{desired_capacity}"
       rescue => e
         AutoScaler.error_logger.error(e)
@@ -49,7 +52,6 @@ module EcsDeploy
         @cluster_resource_manager ||= EcsDeploy::AutoScaler::ClusterResourceManager.new(
           region: region,
           cluster: cluster,
-          buffer: buffer,
           service_configs: service_configs,
           capacity_based_on: "vCPUs",
           logger: @logger,
@@ -90,28 +92,6 @@ module EcsDeploy
           region: region,
           logger: logger,
         )
-      end
-
-      def ecs_client
-        Aws::ECS::Client.new(
-          access_key_id: EcsDeploy.config.access_key_id,
-          secret_access_key: EcsDeploy.config.secret_access_key,
-          region: region,
-          logger: logger,
-        )
-      end
-
-      def wait_for_capacity_decrease(capacity)
-        initial_capacity = @cluster_resource_manager.calculate_active_instance_capacity
-        @logger.info "Wait for the capacity of active instances to become #{initial_capacity - capacity} from #{initial_capacity}"
-        Timeout.timeout(180) do
-          loop do
-            break if @cluster_resource_manager.calculate_active_instance_capacity <= initial_capacity - capacity
-            sleep 5
-          end
-        end
-      rescue Timeout::Error => e
-        AutoScaler.error_logger.warn("`#{__method__}': #{e} (#{e.class})")
       end
     end
   end

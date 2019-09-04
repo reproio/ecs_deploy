@@ -11,8 +11,6 @@ module EcsDeploy
 
       MAX_DESCRIBABLE_TASK_COUNT = 100
 
-      attr_reader :updated_desired_count
-
       def initialize(attributes = {}, logger)
         super
         self.idle_time ||= 60
@@ -25,7 +23,6 @@ module EcsDeploy
         end
         self.max_task_count.sort!
         self.desired_count = fetch_service.desired_count
-        @updated_desired_count = desired_count
         self.required_capacity ||= 1
         @reach_max_at = nil
         @last_updated_at = nil
@@ -151,7 +148,7 @@ module EcsDeploy
         if next_desired_count > desired_count
           increase_desired_count(next_desired_count - desired_count, cluster_resource_manager)
         else
-          decrease_desired_count(desired_count - next_desired_count)
+          decrease_desired_count(desired_count - next_desired_count, cluster_resource_manager)
         end
 
         @last_updated_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
@@ -161,31 +158,38 @@ module EcsDeploy
       end
 
       def increase_desired_count(by, cluster_resource_manager)
+        applied_desired_count = desired_count
         self.desired_count += by
 
+        wait_until = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 180
         @increase_desired_count_thread = Thread.new do
           cl = client
           by.times do
-            cluster_resource_manager.acquire(required_capacity)
-            cl.update_service(
-              cluster: cluster,
-              service: name,
-              desired_count: @updated_desired_count + 1,
-            )
-            @updated_desired_count += 1
+            timeout = wait_until - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            break if timeout <= 0
+            break unless cluster_resource_manager.acquire(required_capacity, timeout: timeout)
+            begin
+              cl.update_service(cluster: cluster, service: name, desired_count: applied_desired_count + 1)
+              applied_desired_count += 1
+            rescue => e
+              cluster_resource_manager.release(required_capacity)
+              AutoScaler.error_logger.error(e)
+              break
+            end
+          end
+
+          if applied_desired_count != desired_count
+            self.desired_count = applied_desired_count
+            @logger.info "Failed to update service \"#{name}\": desired_count -> #{desired_count}"
           end
         end
       end
 
-      def decrease_desired_count(by)
+      def decrease_desired_count(by, cluster_resource_manager)
         cl = client
         running_task_arns = cl.list_tasks(cluster: cluster, service_name: name, desired_status: "RUNNING").flat_map(&:task_arns)
 
-        cl.update_service(
-          cluster: cluster,
-          service: name,
-          desired_count: desired_count - by,
-        )
+        cl.update_service(cluster: cluster, service: name, desired_count: desired_count - by)
 
         cl.wait_until(:services_stable, cluster: cluster, services: [name]) do |w|
           w.before_wait do
@@ -202,8 +206,8 @@ module EcsDeploy
           end
         end
 
+        cluster_resource_manager.release(required_capacity * by)
         self.desired_count -= by
-        @updated_desired_count = desired_count
       end
 
       def max_task_level(count)

@@ -91,7 +91,6 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
 
         before do
           allow(cluster_resource_manager).to receive(:fetch_container_instance_arns_in_service).and_return(["with_essential_running_task"])
-          allow(cluster_resource_manager).to receive(:desired_capacity) { 2 + buffer }
         end
 
         it "terminates instances without esesstial running tasks" do
@@ -99,6 +98,7 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
           expect(cluster_resource_manager).to receive(:deregister_container_instance).with("with_no_task_in_ap_notrheast_1a")
           expect(cluster_resource_manager).to receive(:deregister_container_instance).with("with_no_essential_running_task")
           expect(cluster_resource_manager).to receive(:deregister_container_instance).with("with_no_task_in_ap_notrheast_1a_2")
+          expect(cluster_resource_manager).to receive(:trigger_capacity_update).with(container_instances.size, 3)
           expect_any_instance_of(Aws::AutoScaling::Client).to receive(:detach_instances).with(
             auto_scaling_group_name: asg_name,
             instance_ids: ["i-555555", "i-111111", "i-444444"],
@@ -106,7 +106,7 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
           )
           expect_any_instance_of(Aws::EC2::Client).to receive(:terminate_instances).with(instance_ids: ["i-555555", "i-111111", "i-444444"])
 
-          auto_scaling_group_config.update_desired_capacity
+          auto_scaling_group_config.update_desired_capacity(2)
         end
       end
 
@@ -142,16 +142,16 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
             "with_essential_running_task_1a_0",
             "with_essential_running_task_1a_1",
           ])
-          allow(cluster_resource_manager).to receive(:desired_capacity) { 1 + buffer }
         end
 
         it "dosen't terminates any instances" do
           expect(auto_scaling_group_config).to receive(:detach_and_terminate_orphan_instances)
           expect(cluster_resource_manager).to_not receive(:deregister_container_instance)
+          expect(cluster_resource_manager).to_not receive(:trigger_capacity_update)
           expect_any_instance_of(Aws::AutoScaling::Client).to_not receive(:detach_instances)
           expect_any_instance_of(Aws::EC2::Client).to_not receive(:terminate_instances)
 
-          auto_scaling_group_config.update_desired_capacity
+          auto_scaling_group_config.update_desired_capacity(1)
         end
       end
     end
@@ -164,11 +164,11 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
         allow_any_instance_of(Aws::AutoScaling::Client).to receive(:describe_auto_scaling_groups).with(
           auto_scaling_group_names: [asg_name]
         ).and_return(double(auto_scaling_groups: [double(desired_capacity: current_capacity, max_size: 100)]))
-        allow(cluster_resource_manager).to receive(:desired_capacity) { desired_capacity }
       end
 
       it "updates the desired capacity of the auto scaling group" do
         expect(auto_scaling_group_config).to receive(:detach_and_terminate_orphan_instances)
+        expect(cluster_resource_manager).to receive(:trigger_capacity_update).with(current_capacity, desired_capacity)
         expect_any_instance_of(Aws::AutoScaling::Client).to receive(:update_auto_scaling_group).with(
           auto_scaling_group_name: asg_name,
           min_size: 0,
@@ -176,27 +176,26 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
           desired_capacity: desired_capacity,
         )
 
-        auto_scaling_group_config.update_desired_capacity
+        auto_scaling_group_config.update_desired_capacity(current_capacity)
       end
     end
 
     context "when the current desired capacity is expected" do
       let(:current_capacity) { 2 + buffer }
-      let(:desired_capacity) { current_capacity }
 
       before do
         allow_any_instance_of(Aws::AutoScaling::Client).to receive(:describe_auto_scaling_groups).with(
           auto_scaling_group_names: [asg_name]
         ).and_return(double(auto_scaling_groups: [double(desired_capacity: current_capacity)]))
-        allow(cluster_resource_manager).to receive(:desired_capacity) { desired_capacity }
       end
 
       it "does nothing" do
         expect(auto_scaling_group_config).to receive(:detach_and_terminate_orphan_instances)
+        expect(cluster_resource_manager).to_not receive(:trigger_capacity_update)
         expect_any_instance_of(Aws::EC2::Client).to_not receive(:terminate_instances)
         expect_any_instance_of(Aws::AutoScaling::Client).to_not receive(:update_auto_scaling_group)
 
-        auto_scaling_group_config.update_desired_capacity
+        auto_scaling_group_config.update_desired_capacity(current_capacity - buffer)
       end
     end
   end
