@@ -1,0 +1,48 @@
+polling_interval: 60
+
+auto_scaling_groups:
+  - name: ecs-cluster-nodes
+    region: ap-northeast-1
+    cluster: ecs-cluster
+    buffer: 1
+    services:
+      - name: repro-api-production
+        step: 1
+        idle_time: 240
+        max_task_count: [10, 25]
+        scheduled_min_task_count:
+          - {from: "1:45", to: "4:30", count: 8}
+        cooldown_time_for_reach_max: 600
+        min_task_count: 0
+        required_capacity: 0.5
+        upscale_triggers:
+          - alarm_name: "ECS [repro-api-production] CPUUtilization"
+            state: ALARM
+          - alarm_name: "ELB repro-api-a HTTPCode_Backend_5XX"
+            state: ALARM
+            step: 2
+        downscale_triggers:
+          - alarm_name: "ECS [repro-api-production] CPUUtilization (low)"
+            state: OK
+
+spot_fleet_requests:
+  - id: sfr-354de735-2c17-4565-88c9-10ada5b957e5
+    region: ap-northeast-1
+    cluster: ecs-cluster-for-worker
+    buffer: 1
+    services:
+      - name: repro-worker-production
+        step: 1
+        idle_time: 240
+        cooldown_time_for_reach_max: 600
+        min_task_count: 0
+        required_capacity: 2
+        upscale_triggers:
+          - alarm_name: "ECS [repro-worker-production] CPUUtilization"
+            state: ALARM
+        downscale_triggers:
+          - alarm_name: "ECS [repro-worker-production] CPUUtilization (low)"
+            state: OK
+
+spot_instance_intrp_warns_queue_urls:
+  - https://sqs.ap-northeast-1.amazonaws.com/<account-id>/spot-instance-intrp-warns

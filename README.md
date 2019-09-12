@@ -211,14 +211,52 @@ polling_interval: 60
 auto_scaling_groups:
   - name: ecs-cluster-nodes
     region: ap-northeast-1
+    cluster: ecs-cluster
     # autoscaler will set the capacity to (buffer + desired_tasks * required_capacity).
     # Adjust this value if it takes much time to prepare ECS instances and launch new tasks.
     buffer: 1
+    services:
+      - name: repro-api-production
+        step: 1
+        idle_time: 240
+        max_task_count: [10, 25]
+        scheduled_min_task_count:
+          - {from: "1:45", to: "4:30", count: 8}
+        cooldown_time_for_reach_max: 600
+        min_task_count: 0
+        # Required capacity per task (default: 1)
+        # You should specify "binpack" as task placement strategy if the value is less than 1 and you use an auto scaling group.
+        required_capacity: 0.5
+        upscale_triggers:
+          - alarm_name: "ECS [repro-api-production] CPUUtilization"
+            state: ALARM
+          - alarm_name: "ELB repro-api-a HTTPCode_Backend_5XX"
+            state: ALARM
+            step: 2
+        downscale_triggers:
+          - alarm_name: "ECS [repro-api-production] CPUUtilization (low)"
+            state: OK
 
 spot_fleet_requests:
   - id: sfr-354de735-2c17-4565-88c9-10ada5b957e5
     region: ap-northeast-1
+    cluster: ecs-cluster-for-worker
     buffer: 1
+    services:
+      - name: repro-worker-production
+        step: 1
+        idle_time: 240
+        cooldown_time_for_reach_max: 600
+        min_task_count: 0
+        # Required capacity per task (default: 1)
+        # The capacity assumes that WeightedCapacity is equal to the number of vCPUs.
+        required_capacity: 2
+        upscale_triggers:
+          - alarm_name: "ECS [repro-worker-production] CPUUtilization"
+            state: ALARM
+        downscale_triggers:
+          - alarm_name: "ECS [repro-worker-production] CPUUtilization (low)"
+            state: OK
 
 # If you specify `spot_instance_intrp_warns_queue_urls` as SQS queue for spot instance interruption warnings,
 # autoscaler will polls them and set the state of instances to be intrrupted to "DRAINING".
@@ -227,49 +265,6 @@ spot_fleet_requests:
 # so you should specify URLs or set the state of the instances to "DRAINING" manually.
 spot_instance_intrp_warns_queue_urls:
   - https://sqs.ap-northeast-1.amazonaws.com/<account-id>/spot-instance-intrp-warns
-
-services:
-  - name: repro-api-production
-    cluster: ecs-cluster
-    region: ap-northeast-1
-    # auto_scaling_group_name or spot fleet request ID the instances in the cluster belongs to
-    auto_scaling_group_name: ecs-cluster-nodes
-    step: 1
-    idle_time: 240
-    max_task_count: [10, 25]
-    scheduled_min_task_count:
-      - {from: "1:45", to: "4:30", count: 8}
-    cooldown_time_for_reach_max: 600
-    min_task_count: 0
-    # Required capacity per task (default: 1)
-    # You should specify "binpack" as task placement strategy if the value is less than 1 and you use an auto scaling group.
-    required_capacity: 0.5
-    upscale_triggers:
-      - alarm_name: "ECS [repro-api-production] CPUUtilization"
-        state: ALARM
-      - alarm_name: "ELB repro-api-a HTTPCode_Backend_5XX"
-        state: ALARM
-        step: 2
-    downscale_triggers:
-      - alarm_name: "ECS [repro-api-production] CPUUtilization (low)"
-        state: OK
-
-  - name: repro-worker-production
-    cluster: ecs-cluster-for-worker
-    region: ap-northeast-1
-    spot_fleet_request_id: sfr-354de735-2c17-4565-88c9-10ada5b957e5
-    step: 1
-    idle_time: 240
-    cooldown_time_for_reach_max: 600
-    min_task_count: 0
-    required_capacity: 2
-    upscale_triggers:
-      - alarm_name: "ECS [repro-worker-production] CPUUtilization"
-        state: ALARM
-    downscale_triggers:
-      - alarm_name: "ECS [repro-worker-production] CPUUtilization (low)"
-        state: OK
-
 ```
 
 Then, execute the following command:

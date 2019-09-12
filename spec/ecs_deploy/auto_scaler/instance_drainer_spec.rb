@@ -5,14 +5,11 @@ require "ecs_deploy/auto_scaler/instance_drainer"
 RSpec.describe EcsDeploy::AutoScaler::InstanceDrainer do
   describe "#poll_spot_instance_interruption_warnings" do
     subject(:drainer) do
-      described_class.new(service_configs, Logger.new(nil))
-    end
-
-    let(:service_configs) do
-      [
-        double(region: "ap-northeast-1", auto_scaling_group_name: nil, spot_fleet_request_id: "sfr_id", cluster: nil, foo: 1),
-        double(region: "ap-northeast-1", auto_scaling_group_name: "asg_name", spot_fleet_request_id: nil, cluster: "ecs-cluster"),
-      ]
+      described_class.new(
+        auto_scaling_group_configs: [double(name: "asg_name", region: "ap-northeast-1", cluster: "ecs-cluster")],
+        spot_fleet_request_configs: [double(id: "sfr_id", region: "ap-northeast-1", cluster: nil)],
+        logger: Logger.new(nil),
+      )
     end
 
     let(:instances) do

@@ -22,22 +22,17 @@ module EcsDeploy
         @error_logger.level = Logger.const_get(ENV["ECS_AUTO_SCALER_LOG_LEVEL"].upcase) if ENV["ECS_AUTO_SCALER_LOG_LEVEL"]
         STDERR.sync = true unless error_log_file
         load_config(yaml_path)
-        service_configs
-        auto_scaling_group_configs
-        spot_fleet_request_configs
 
-        config_groups = service_configs.group_by { |s| [s.region, s.auto_scaling_group_name, s.spot_fleet_request_id] }
-        ths = config_groups.map do |(region, auto_scaling_group_name, spot_fleet_request_id), configs|
-          if auto_scaling_group_name
-            cluster_scaling_config = auto_scaling_group_configs[auto_scaling_group_name][region]
-          else
-            cluster_scaling_config = spot_fleet_request_configs[spot_fleet_request_id][region]
-          end
-          Thread.new(cluster_scaling_config, configs, &method(:main_loop)).tap { |th| th.abort_on_exception = true }
+        ths = (auto_scaling_group_configs + spot_fleet_request_configs).map do |cluster_scaling_config|
+          Thread.new(cluster_scaling_config, &method(:main_loop)).tap { |th| th.abort_on_exception = true }
         end
 
         if @config["spot_instance_intrp_warns_queue_urls"]
-          drainer = EcsDeploy::AutoScaler::InstanceDrainer.new(service_configs, logger)
+          drainer = EcsDeploy::AutoScaler::InstanceDrainer.new(
+            auto_scaling_group_configs: auto_scaling_group_configs,
+            spot_fleet_request_configs: spot_fleet_request_configs,
+            logger: logger,
+          )
           polling_ths = @config["spot_instance_intrp_warns_queue_urls"].map do |queue_url|
             Thread.new(queue_url) do |url|
               drainer.poll_spot_instance_interruption_warnings(url)
@@ -51,12 +46,12 @@ module EcsDeploy
         polling_ths&.each(&:join)
       end
 
-      def main_loop(cluster_scaling_config, configs)
+      def main_loop(cluster_scaling_config)
         loop_with_polling_interval("loop of #{cluster_scaling_config.name}") do
-          ths = configs.map do |service_config|
+          ths = cluster_scaling_config.service_configs.map do |service_config|
             Thread.new(service_config) do |s|
               @logger.debug "Start service scaling of #{s.name}"
-              s.adjust_desired_count
+              s.adjust_desired_count(cluster_scaling_config.cluster_resource_manager)
             end
           end
           ths.each { |th| th.abort_on_exception = true }
@@ -65,18 +60,41 @@ module EcsDeploy
 
           @logger.debug "Start cluster scaling of #{cluster_scaling_config.name}"
 
-          required_capacity = configs.inject(0) { |sum, s| sum + s.desired_count * s.required_capacity }
-          cluster_scaling_config.update_desired_capacity(required_capacity, configs[0])
+          required_capacity = cluster_scaling_config.service_configs.sum { |s| s.desired_count * s.required_capacity }
+          cluster_scaling_config.update_desired_capacity(required_capacity)
+
+          cluster_scaling_config.service_configs.each(&:wait_until_desired_count_updated)
         end
       end
 
       def load_config(yaml_path)
         @config = YAML.load_file(yaml_path)
         @polling_interval = @config["polling_interval"] || 30
-      end
+        if @config["services"]
+          @error_logger&.warn('"services" property in root-level is deprecated. Please define it in "auto_scaling_groups" property or "spot_fleet_requests" property.')
+          @config.delete("services").each do |svc|
+            if svc["auto_scaling_group_name"] && svc["spot_fleet_request_id"]
+              raise "You can specify only one of 'auto_scaling_group_name' or 'spot_fleet_request_name'"
+            end
 
-      def service_configs
-        @service_configs ||= @config["services"].map { |c| ServiceConfig.new(c, @logger) }
+            svc_region = svc.delete("region")
+            if svc["auto_scaling_group_name"]
+              asg_name = svc.delete("auto_scaling_group_name")
+              asg = @config["auto_scaling_groups"].find { |g| g["region"] == svc_region && g["name"] == asg_name }
+              asg["services"] ||= []
+              asg["services"] << svc
+              asg["cluster"] = svc.delete("cluster")
+            end
+
+            if svc["spot_fleet_request_id"]
+              sfr_id = svc.delete("spot_fleet_request_id")
+              sfr = @config["spot_fleet_requests"].find { |r| r["region"] == svc_region && r["id"] == sfr_id }
+              sfr["services"] ||= []
+              sfr["services"] << svc
+              sfr["cluster"] = svc.delete("cluster")
+            end
+          end
+        end
       end
 
       def auto_scaling_group_configs
@@ -86,7 +104,7 @@ module EcsDeploy
             raise "Duplicate entry in auto_scaling_groups (name: #{c["name"]}, region: #{c["region"]})"
           end
           configs[c["name"]][c["region"]] = AutoScalingGroupConfig.new(c, @logger)
-        end
+        end.values.flat_map(&:values)
       end
 
       def spot_fleet_request_configs
@@ -96,7 +114,7 @@ module EcsDeploy
             raise "Duplicate entry in spot_fleet_requests (id: #{c["id"]}, region: #{c["region"]})"
           end
           configs[c["id"]][c["region"]] = SpotFleetRequestConfig.new(c, @logger)
-        end
+        end.values.flat_map(&:values)
       end
 
       private

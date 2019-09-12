@@ -6,8 +6,9 @@ require "ecs_deploy"
 module EcsDeploy
   module AutoScaler
     class InstanceDrainer
-      def initialize(service_configs, logger)
-        @service_configs = service_configs
+      def initialize(auto_scaling_group_configs:, spot_fleet_request_configs:, logger:)
+        @auto_scaling_group_configs = auto_scaling_group_configs || []
+        @spot_fleet_request_configs = spot_fleet_request_configs || []
         @logger = logger
         @stop = false
       end
@@ -57,14 +58,14 @@ module EcsDeploy
           reservation.instances.each do |i|
             sfr_id = i.tags.find { |t| t.key == "aws:ec2spot:fleet-request-id" }&.value
             if sfr_id
-              config = @service_configs.find { |s| s.spot_fleet_request_id == sfr_id && s.region == region }
+              config = @spot_fleet_request_configs.find { |c| c.id == sfr_id && c.region == region }
               cluster_to_instance_ids[config.cluster] << i.instance_id if config
               next
             end
 
             asg_name = i.tags.find { |t| t.key == "aws:autoscaling:groupName" }&.value
             if asg_name
-              config = @service_configs.find { |s| s.auto_scaling_group_name == asg_name && s.region == region }
+              config = @auto_scaling_group_configs.find { |c| c.name == asg_name && c.region == region }
               cluster_to_instance_ids[config.cluster] << i.instance_id if config
             end
           end
