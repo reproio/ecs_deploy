@@ -97,7 +97,7 @@ module EcsDeploy
           @logger&.info "#{log_prefix} Wait for the capacity of active instances to become #{new_desired_capacity} from #{old_desired_capacity}"
           begin
             th.join
-          rescue Timeout::Error
+          rescue Timeout::Error => e
             msg = "#{log_prefix} `#{__method__}': #{e} (#{e.class})"
             if @capacity_based_on == "vCPUs"
               # Timeout::Error sometimes occur.
