@@ -40,7 +40,7 @@ module EcsDeploy
           next if difference >= trigger.step
 
           if trigger.match?
-            @logger.info "Fire upscale trigger of #{name} by #{trigger.alarm_name} #{trigger.state}"
+            @logger.info "#{log_prefix} Fire upscale trigger by #{trigger.alarm_name} #{trigger.state}"
             difference = trigger.step
           end
         end
@@ -49,7 +49,7 @@ module EcsDeploy
           downscale_triggers.each do |trigger|
             next unless trigger.match?
 
-            @logger.info "Fire downscale trigger of #{name} by #{trigger.alarm_name} #{trigger.state}"
+            @logger.info "#{log_prefix} Fire downscale trigger by #{trigger.alarm_name} #{trigger.state}"
             difference = [difference, -trigger.step].min
           end
         end
@@ -123,25 +123,25 @@ module EcsDeploy
         if current_level < next_level && overheat? # next max
           level = next_level
           @reach_max_at = nil
-          @logger.info "Service \"#{name}\" is overheat, uses next max count"
+          @logger.info "#{log_prefix} Service is overheat, uses next max count"
         elsif current_level < next_level && !overheat? # wait cooldown
           level = current_level
           now = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
           @reach_max_at ||= now
-          @logger.info "Service \"#{name}\" waits cooldown elapsed #{(now - @reach_max_at).to_i}sec"
+          @logger.info "#{log_prefix} Service waits cooldown elapsed #{(now - @reach_max_at).to_i}sec"
         elsif current_level == next_level && next_desired_count >= max_task_count[current_level] # reach current max
           level = current_level
           now = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
           @reach_max_at ||= now
-          @logger.info "Service \"#{name}\" waits cooldown elapsed #{(now - @reach_max_at).to_i}sec"
+          @logger.info "#{log_prefix} Service waits cooldown elapsed #{(now - @reach_max_at).to_i}sec"
         elsif current_level == next_level && next_desired_count < max_task_count[current_level]
           level = current_level
           @reach_max_at = nil
-          @logger.info "Service \"#{name}\" clears cooldown state"
+          @logger.info "#{log_prefix} Service clears cooldown state"
         elsif current_level > next_level
           level = next_level
           @reach_max_at = nil
-          @logger.info "Service \"#{name}\" clears cooldown state"
+          @logger.info "#{log_prefix} Service clears cooldown state"
         end
 
         next_desired_count = [next_desired_count, max_task_count[level]].min
@@ -152,7 +152,7 @@ module EcsDeploy
         end
 
         @last_updated_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
-        @logger.info "Update service \"#{name}\": desired_count -> #{next_desired_count}"
+        @logger.info "#{log_prefix} Update desired_count to #{next_desired_count}"
       rescue => e
         AutoScaler.error_logger.error(e)
       end
@@ -180,7 +180,7 @@ module EcsDeploy
 
           if applied_desired_count != desired_count
             self.desired_count = applied_desired_count
-            @logger.info "Failed to update service \"#{name}\": desired_count -> #{desired_count}"
+            @logger.info "#{log_prefix} Failed to update service and set desired_count to #{desired_count}"
           end
         end
       end
@@ -193,7 +193,7 @@ module EcsDeploy
 
         cl.wait_until(:services_stable, cluster: cluster, services: [name]) do |w|
           w.before_wait do
-            @logger.debug "wait service stable [#{name}]"
+            @logger.debug "#{log_prefix} wait service stable"
           end
         end
 
@@ -201,7 +201,7 @@ module EcsDeploy
         stopping_task_arns.each_slice(MAX_DESCRIBABLE_TASK_COUNT) do |arns|
           cl.wait_until(:tasks_stopped, cluster: cluster, tasks: arns) do |w|
             w.before_wait do
-              @logger.debug "wait stopping tasks stopped [#{name}]"
+              @logger.debug "#{log_prefix} wait stopping tasks stopped"
             end
           end
         end
@@ -212,6 +212,10 @@ module EcsDeploy
 
       def max_task_level(count)
         max_task_count.index { |i| count <= i } || max_task_count.size - 1
+      end
+
+      def log_prefix
+        "[#{self.class.to_s.sub(/\AEcsDeploy::AutoScaler::/, "")} #{name} #{region}]"
       end
     end
   end

@@ -43,7 +43,7 @@ module EcsDeploy
           # Wait until the capacity is updated to prevent the process from terminating before container draining is completed
           wait_until_capacity_updated: desired_capacity < request_config.target_capacity,
         )
-        @logger.info "Update spot fleet request \"#{id}\": desired_capacity -> #{desired_capacity}"
+        @logger.info "#{log_prefix} Update desired_capacity to #{desired_capacity}"
       rescue => e
         AutoScaler.error_logger.error(e)
       end
@@ -80,7 +80,7 @@ module EcsDeploy
         # because we can't terminate canceled spot instances by decreasing the capacity
         ec2_client.terminate_instances(instance_ids: instance_ids)
 
-        @logger.info "Terminated instances: #{instance_ids.inspect}"
+        @logger.info "#{log_prefix} Terminated instances: #{instance_ids.inspect}"
       rescue => e
         AutoScaler.error_logger.error(e)
       end
@@ -92,6 +92,10 @@ module EcsDeploy
           region: region,
           logger: logger,
         )
+      end
+
+      def log_prefix
+        "[#{self.class.to_s.sub(/\AEcsDeploy::AutoScaler::/, "")} #{name} #{region}]"
       end
     end
   end
