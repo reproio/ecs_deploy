@@ -1,5 +1,6 @@
 require "aws-sdk-autoscaling"
 require "aws-sdk-ec2"
+
 require "ecs_deploy"
 require "ecs_deploy/auto_scaler/config_base"
 require "ecs_deploy/auto_scaler/cluster_resource_manager"
@@ -62,6 +63,20 @@ module EcsDeploy
         )
       end
 
+      def detach_instances(instance_ids:, should_decrement_desired_capacity:)
+        return if instance_ids.empty?
+
+        instance_ids.each_slice(MAX_DETACHABLE_INSTANCE_COUNT) do |ids|
+          client.detach_instances(
+            auto_scaling_group_name: name,
+            instance_ids: ids,
+            should_decrement_desired_capacity: should_decrement_desired_capacity,
+          )
+        end
+
+        @logger.info "#{log_prefix} Detach instances from ASG: #{instance_ids.inspect}"
+      end
+
       private
 
       def decrease_desired_capacity(count)
@@ -110,15 +125,11 @@ module EcsDeploy
       def detach_and_terminate_instances(instance_ids)
         return if instance_ids.empty?
 
-        instance_ids.each_slice(MAX_DETACHABLE_INSTANCE_COUNT) do |ids|
-          client.detach_instances(
-            auto_scaling_group_name: name,
-            instance_ids: ids,
-            should_decrement_desired_capacity: true
-          )
-        end
+        detach_instances(
+          instance_ids: instance_ids,
+          should_decrement_desired_capacity: true
+        )
 
-        @logger.info "#{log_prefix} Detach instances from ASG: #{instance_ids.inspect}"
         sleep 3
 
         ec2_client.terminate_instances(instance_ids: instance_ids)
