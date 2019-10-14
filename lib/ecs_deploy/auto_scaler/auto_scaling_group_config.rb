@@ -141,7 +141,16 @@ module EcsDeploy
 
       def detach_and_terminate_orphan_instances
         container_instance_ids = cluster_resource_manager.fetch_container_instances_in_cluster.map(&:ec2_instance_id)
-        orphans = instances(reload: true).reject { |i| container_instance_ids.include?(i.instance_id) }.map(&:instance_id)
+        orphans = instances(reload: true).reject do |i|
+          next true if container_instance_ids.include?(i.instance_id)
+
+          # The lifecycle state of terminated instances becomes "Terminating", "Terminating:Wait", or "Terminating:Proceed",
+          # and we can't detach instances in such a state.
+          if i.lifecycle_state.start_with?("Terminating")
+            AutoScaler.error_logger.warn("#{log_prefix} The lifesycle state of #{i.instance_id} is \"#{i.lifecycle_state}\", so ignore it")
+            next true
+          end
+        end.map(&:instance_id)
 
         return if orphans.empty?
 
