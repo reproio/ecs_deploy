@@ -1,5 +1,6 @@
 require "aws-sdk-autoscaling"
 require "aws-sdk-ec2"
+
 require "ecs_deploy"
 require "ecs_deploy/auto_scaler/config_base"
 require "ecs_deploy/auto_scaler/cluster_resource_manager"
@@ -34,9 +35,9 @@ module EcsDeploy
           if decreased_capacity > 0
             new_desired_capacity = current_asg.desired_capacity - decreased_capacity
             cluster_resource_manager.trigger_capacity_update(current_asg.desired_capacity, new_desired_capacity)
-            @logger.info "Update auto scaling group \"#{name}\": desired_capacity -> #{new_desired_capacity}"
+            @logger.info "#{log_prefix} Update desired_capacity to #{new_desired_capacity}"
           else
-            @logger.info "Tried to Update auto scaling group \"#{name}\" but there were no deregisterable instances"
+            @logger.info "#{log_prefix} Tried to Update desired_capacity but there were no deregisterable instances"
           end
         elsif current_asg.desired_capacity < desired_capacity
           client.update_auto_scaling_group(
@@ -46,7 +47,7 @@ module EcsDeploy
             desired_capacity: desired_capacity,
           )
           cluster_resource_manager.trigger_capacity_update(current_asg.desired_capacity, desired_capacity)
-          @logger.info "Update auto scaling group \"#{name}\": desired_capacity -> #{desired_capacity}"
+          @logger.info "#{log_prefix} Update desired_capacity to #{desired_capacity}"
         end
       rescue => e
         AutoScaler.error_logger.error(e)
@@ -62,6 +63,20 @@ module EcsDeploy
         )
       end
 
+      def detach_instances(instance_ids:, should_decrement_desired_capacity:)
+        return if instance_ids.empty?
+
+        instance_ids.each_slice(MAX_DETACHABLE_INSTANCE_COUNT) do |ids|
+          client.detach_instances(
+            auto_scaling_group_name: name,
+            instance_ids: ids,
+            should_decrement_desired_capacity: should_decrement_desired_capacity,
+          )
+        end
+
+        @logger.info "#{log_prefix} Detach instances from ASG: #{instance_ids.inspect}"
+      end
+
       private
 
       def decrease_desired_capacity(count)
@@ -71,7 +86,7 @@ module EcsDeploy
           i.pending_tasks_count == 0 && !running_essential_task?(i, container_instance_arns_in_service)
         end
 
-        @logger.info "Fetch deregisterable instances: #{deregisterable_instances.map(&:ec2_instance_id).inspect}"
+        @logger.info "#{log_prefix} Fetch deregisterable instances: #{deregisterable_instances.map(&:ec2_instance_id).inspect}"
 
         az_to_instance_count = instances(reload: true).each_with_object(Hash.new(0)) { |i, h| h[i.availability_zone] += 1 }
         az_to_deregisterable_instances = deregisterable_instances.group_by do |i|
@@ -100,7 +115,7 @@ module EcsDeploy
           prev_max_count = max_count
         end
 
-        @logger.info "Deregistered instances: #{deregistered_instance_ids.inspect}"
+        @logger.info "#{log_prefix} Deregistered instances: #{deregistered_instance_ids.inspect}"
 
         detach_and_terminate_instances(deregistered_instance_ids)
 
@@ -110,27 +125,32 @@ module EcsDeploy
       def detach_and_terminate_instances(instance_ids)
         return if instance_ids.empty?
 
-        instance_ids.each_slice(MAX_DETACHABLE_INSTANCE_COUNT) do |ids|
-          client.detach_instances(
-            auto_scaling_group_name: name,
-            instance_ids: ids,
-            should_decrement_desired_capacity: true
-          )
-        end
+        detach_instances(
+          instance_ids: instance_ids,
+          should_decrement_desired_capacity: true
+        )
 
-        @logger.info "Detach instances from ASG #{name}: #{instance_ids.inspect}"
         sleep 3
 
         ec2_client.terminate_instances(instance_ids: instance_ids)
 
-        @logger.info "Terminated instances: #{instance_ids.inspect}"
+        @logger.info "#{log_prefix} Terminated instances: #{instance_ids.inspect}"
       rescue => e
         AutoScaler.error_logger.error(e)
       end
 
       def detach_and_terminate_orphan_instances
         container_instance_ids = cluster_resource_manager.fetch_container_instances_in_cluster.map(&:ec2_instance_id)
-        orphans = instances(reload: true).reject { |i| container_instance_ids.include?(i.instance_id) }.map(&:instance_id)
+        orphans = instances(reload: true).reject do |i|
+          next true if container_instance_ids.include?(i.instance_id)
+
+          # The lifecycle state of terminated instances becomes "Terminating", "Terminating:Wait", or "Terminating:Proceed",
+          # and we can't detach instances in such a state.
+          if i.lifecycle_state.start_with?("Terminating")
+            AutoScaler.error_logger.warn("#{log_prefix} The lifesycle state of #{i.instance_id} is \"#{i.lifecycle_state}\", so ignore it")
+            next true
+          end
+        end.map(&:instance_id)
 
         return if orphans.empty?
 
@@ -176,6 +196,10 @@ module EcsDeploy
         return false if instance.running_tasks_count == 0
 
         container_instance_arns_in_service.include?(instance.container_instance_arn)
+      end
+
+      def log_prefix
+        "[#{self.class.to_s.sub(/\AEcsDeploy::AutoScaler::/, "")} #{name} #{region}]"
       end
     end
   end

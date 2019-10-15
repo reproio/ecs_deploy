@@ -142,7 +142,7 @@ module EcsDeploy
       end
 
       def log_prefix
-        "[#{self.class}, region: #{@region}, cluster: #{@cluster}]"
+        "[#{self.class.to_s.gsub(/\AEcsDeploy::AutoScaler::/, "")} #{@region} #{@cluster}]"
       end
     end
   end
