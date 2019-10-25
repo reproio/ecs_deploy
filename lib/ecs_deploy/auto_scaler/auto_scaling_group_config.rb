@@ -82,13 +82,16 @@ module EcsDeploy
       def decrease_desired_capacity(count)
         container_instance_arns_in_service = cluster_resource_manager.fetch_container_instance_arns_in_service
         container_instances_in_cluster = cluster_resource_manager.fetch_container_instances_in_cluster
+        auto_scaling_group_instances = instances(reload: true)
         deregisterable_instances = container_instances_in_cluster.select do |i|
-          i.pending_tasks_count == 0 && !running_essential_task?(i, container_instance_arns_in_service)
+          i.pending_tasks_count == 0 &&
+            !running_essential_task?(i, container_instance_arns_in_service) &&
+            auto_scaling_group_instances.any? {|instance| instance.instance_id == i.ec2_instance_id }
         end
 
         @logger.info "#{log_prefix} Fetch deregisterable instances: #{deregisterable_instances.map(&:ec2_instance_id).inspect}"
 
-        az_to_instance_count = instances(reload: true).each_with_object(Hash.new(0)) { |i, h| h[i.availability_zone] += 1 }
+        az_to_instance_count = instances(reload: false).each_with_object(Hash.new(0)) { |i, h| h[i.availability_zone] += 1 }
         az_to_deregisterable_instances = deregisterable_instances.group_by do |i|
           i.attributes.find { |a| a.name == "ecs.availability-zone" }.value
         end
