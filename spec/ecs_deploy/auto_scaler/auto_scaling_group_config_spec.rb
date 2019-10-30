@@ -31,7 +31,12 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
             auto_scaling_groups: [
               double(
                 desired_capacity: container_instances.size,
-                instances: container_instances.map { |i| double(availability_zone: i.attributes.find { |a| a.name == "ecs.availability-zone" }.value) },
+                instances: container_instances.map do |i|
+                  double(
+                    availability_zone: i.attributes.find { |a| a.name == "ecs.availability-zone" }.value,
+                    instance_id: i.ec2_instance_id,
+                  )
+                end,
               )
             ]
           )
@@ -196,6 +201,108 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
         expect_any_instance_of(Aws::AutoScaling::Client).to_not receive(:update_auto_scaling_group)
 
         auto_scaling_group_config.update_desired_capacity(current_capacity - buffer)
+      end
+    end
+
+    context "when detached instance is still in the ecs cluster" do
+      let(:container_instances) do
+        [
+          Aws::ECS::Types::ContainerInstance.new(
+            pending_tasks_count: 0,
+            running_tasks_count: 0,
+            ec2_instance_id: "i-000000",
+            container_instance_arn: "with_no_pending_and_running_task_1a",
+            attributes: [Aws::ECS::Types::Attribute.new(name: "ecs.availability-zone", value: "ap-notrheast-1a")],
+          ),
+          Aws::ECS::Types::ContainerInstance.new(
+            pending_tasks_count: 0,
+            running_tasks_count: 0,
+            ec2_instance_id: "i-111111",
+            container_instance_arn: "already_detached_by_drainer_but_still_in_the_cluster",
+            attributes: [Aws::ECS::Types::Attribute.new(name: "ecs.availability-zone", value: "ap-notrheast-1a")],
+          ),
+          Aws::ECS::Types::ContainerInstance.new(
+            pending_tasks_count: 0,
+            running_tasks_count: 1,
+            ec2_instance_id: "i-222222",
+            container_instance_arn: "with_running_task",
+            attributes: [Aws::ECS::Types::Attribute.new(name: "ecs.availability-zone", value: "ap-notrheast-1c")],
+          ),
+          Aws::ECS::Types::ContainerInstance.new(
+            pending_tasks_count: 0,
+            running_tasks_count: 0,
+            ec2_instance_id: "i-333333",
+            container_instance_arn: "with_no_pending_and_running_task_1c",
+            attributes: [Aws::ECS::Types::Attribute.new(name: "ecs.availability-zone", value: "ap-notrheast-1c")],
+          ),
+        ]
+      end
+      let(:auto_scaling_group_instances) do
+        [
+          Aws::AutoScaling::Types::Instance.new(
+            instance_id: "i-000000",
+            availability_zone: "ap-notrheast-1a",
+            lifecycle_state: "InService",
+            health_status: "Healthy",
+            launch_template: "launch_template",
+            protected_from_scale_in: true,
+          ),
+          Aws::AutoScaling::Types::Instance.new(
+            instance_id: "i-222222",
+            availability_zone: "ap-notrheast-1c",
+            lifecycle_state: "InService",
+            health_status: "Healthy",
+            launch_template: "launch_template",
+            protected_from_scale_in: true,
+          ),
+          Aws::AutoScaling::Types::Instance.new(
+            instance_id: "i-333333",
+            availability_zone: "ap-notrheast-1c",
+            lifecycle_state: "InService",
+            health_status: "Healthy",
+            launch_template: "launch_template",
+            protected_from_scale_in: true,
+          ),
+        ]
+      end
+
+      before do
+        allow_any_instance_of(Aws::AutoScaling::Client).to receive(:describe_auto_scaling_groups).with(
+          auto_scaling_group_names: [asg_name],
+        ).and_return(
+          double(
+            auto_scaling_groups: [
+              double(
+                desired_capacity: container_instances.size,
+                instances: auto_scaling_group_instances.map do |i|
+                  double(
+                    availability_zone: i.availability_zone,
+                    instance_id: i.instance_id,
+                  )
+                end,
+              )
+            ]
+          )
+        )
+
+        allow(cluster_resource_manager).to receive(:fetch_container_instances_in_cluster).and_return(container_instances)
+        allow(auto_scaling_group_config).to receive(:sleep).and_return(nil)
+        allow(cluster_resource_manager).to receive(:fetch_container_instance_arns_in_service).and_return(["with_running_task"])
+      end
+
+      it "terminates auto scaliing group instances without esesstial running tasks" do
+        expect(auto_scaling_group_config).to receive(:detach_and_terminate_orphan_instances)
+        expect(cluster_resource_manager).to receive(:deregister_container_instance).with("with_no_pending_and_running_task_1c")
+        expect(cluster_resource_manager).not_to receive(:deregister_container_instance).with("already_detached_but_still_in_the_cluster")
+        expect_any_instance_of(Aws::AutoScaling::Client).to receive(:detach_instances).with(
+          auto_scaling_group_name: asg_name,
+          instance_ids: ["i-333333"],
+          should_decrement_desired_capacity: true,
+        )
+        expect_any_instance_of(Aws::EC2::Client).to receive(:terminate_instances).with(instance_ids: ["i-333333"])
+        expect(cluster_resource_manager).to receive(:trigger_capacity_update).with(container_instances.size, 3)
+
+        auto_scaling_group_config.update_desired_capacity(2)
       end
     end
   end
