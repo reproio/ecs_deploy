@@ -186,4 +186,50 @@ namespace :ecs do
       end
     end
   end
+
+  task increase_instances: [:configure] do
+    configs = fetch(:ecs_instance_fluctuation_manager_configs, [])
+    unless configs.empty?
+      regions = Array(fetch(:ecs_region))
+      regions = [EcsDeploy.config.default_region] if regions.empty?
+      regions.each do |region|
+        configs.each do |config|
+          logger = config.fetch?(:logger, EcsDeploy.logger)
+          m = EcsDeploy::AutoScaler::InstanceFluctuationManager.new(
+            region: config[:region] || region,
+            target_cluster: config[:cluster] || fetch(:ecs_default_cluster),
+            cluster_to_asg: config[:cluster_to_asg],
+            desired_capacity: config[:desired_capacity],
+            logger: logger
+          )
+          m.increase
+        end
+      end
+    end
+  end
+
+  task decrease_instances: [:configure] do
+    configs = fetch(:ecs_instance_fluctuation_manager_configs, [])
+    unless configs.empty?
+      regions = Array(fetch(:ecs_region))
+      regions = [EcsDeploy.config.default_region] if regions.empty?
+      regions.each do |region|
+        configs.each do |config|
+          logger = config.fetch(:logger, EcsDeploy.logger)
+          m = EcsDeploy::AutoScaler::InstanceFluctuationManager.new(
+            region: config[:region] || region,
+            target_cluster: config[:cluster] || fetch(:ecs_default_cluster),
+            cluster_to_asg: config[:cluster_to_asg],
+            desired_capacity: config[:desired_capacity],
+            logger: logger
+          )
+          m.decrease
+        end
+      end
+    end
+  end
 end
+
+before "deploy:updating", "ecs:increase_instances"
+after "deploy:finishing", "ecs:decrease_instances"
+after "deploy:failed", "ecs:decrease_instances"
