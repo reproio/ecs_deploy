@@ -197,7 +197,7 @@ namespace :ecs do
           logger = config.fetch?(:logger, EcsDeploy.logger)
           m = EcsDeploy::AutoScaler::InstanceFluctuationManager.new(
             region: config[:region] || region,
-            target_cluster: config[:cluster] || fetch(:ecs_default_cluster),
+            cluster: config[:cluster] || fetch(:ecs_default_cluster),
             cluster_to_asg: config[:cluster_to_asg],
             desired_capacity: config[:desired_capacity],
             logger: logger
@@ -218,7 +218,7 @@ namespace :ecs do
           logger = config.fetch(:logger, EcsDeploy.logger)
           m = EcsDeploy::AutoScaler::InstanceFluctuationManager.new(
             region: config[:region] || region,
-            target_cluster: config[:cluster] || fetch(:ecs_default_cluster),
+            cluster: config[:cluster] || fetch(:ecs_default_cluster),
             cluster_to_asg: config[:cluster_to_asg],
             desired_capacity: config[:desired_capacity],
             logger: logger
