@@ -230,7 +230,3 @@ namespace :ecs do
     end
   end
 end
-
-before "deploy:updating", "ecs:increase_instances"
-after "deploy:finishing", "ecs:decrease_instances"
-after "deploy:failed", "ecs:decrease_instances"
