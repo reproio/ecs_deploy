@@ -194,7 +194,7 @@ namespace :ecs do
       regions = [EcsDeploy.config.default_region] if regions.empty?
       regions.each do |region|
         configs.each do |config|
-          logger = config.fetch?(:logger, EcsDeploy.logger)
+          logger = config.fetch(:logger, EcsDeploy.logger)
           m = EcsDeploy::AutoScaler::InstanceFluctuationManager.new(
             region: config[:region] || region,
             cluster: config[:cluster] || fetch(:ecs_default_cluster),
