@@ -1,4 +1,5 @@
 require 'ecs_deploy'
+require 'ecs_deploy/auto_scaler/instance_fluctuation_manager'
 
 namespace :ecs do
   task :configure do
