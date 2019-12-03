@@ -448,6 +448,35 @@ The following permissions are required for the preceding configuration of "repro
 }
 ```
 
+### How to deploy faster with Auto Scaling Group
+
+Add following configuration to your deploy.rb and hooks if you need.
+
+```ruby
+# deploy.rb
+set :ecs_instance_fluctuation_manager_configs, [
+  {
+    region: "ap-northeast-1",
+    cluster: "CLUSTER_NAME",
+    cluster_to_asg: { "CLUSTER_NAME" => "AUTO_SCALING_GROUP_NAME" },
+    desired_capacity: 20, # original capacity of auto scaling group
+  }
+]
+```
+
+This configuration enables tasks `ecs:increase_instances` and `ecs:decrease_instances`.
+If this configuration is not set, the above tasks do nothing.
+The task `ecs:increase_instances` will increase ECS instances.
+The task `ecs:decrease_instances` will decrease ECS instances considering AZ balance.
+
+Hook configuration example:
+
+```ruby
+after "deploy:updating", "ecs:increase_instances"
+after "deploy:finished", "ecs:decrease_instances"
+after "deploy:failed", "ecs:decrease_instances"
+after "ecs:rollback", "ecs:decrease_instances"
+```
 
 ## Development
 
