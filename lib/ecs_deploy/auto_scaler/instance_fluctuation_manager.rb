@@ -63,14 +63,14 @@ module EcsDeploy
         region_to_container_instances = container_instances.sort_by {|ci| - ci.running_tasks_count }.group_by do |ci|
           ci.attributes.find {|attribute| attribute.name == "ecs.availability-zone" }.value
         end
-        target_container_instances = if region_to_container_instances.empty?
-                                       []
-                                     else
-                                       decrease_count.times.map do |i|
-                                         region = region_to_container_instances.keys[i % region_to_container_instances.size]
-                                         region_to_container_instances[region].pop
-                                       end
-                                     end
+        if region_to_container_instances.empty?
+          @logger.info("There are no instances to terminate.")
+          return
+        end
+        target_container_instances = decrease_count.times.map do |i|
+          region = region_to_container_instances.keys[i % region_to_container_instances.size]
+          region_to_container_instances[region].pop
+        end
 
         threads = []
         target_container_instances.map(&:container_instance_arn).each_slice(10) do |arns|
