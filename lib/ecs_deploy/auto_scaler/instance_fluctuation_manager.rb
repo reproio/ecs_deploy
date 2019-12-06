@@ -7,7 +7,7 @@ module EcsDeploy
     class InstanceFluctuationManager
       attr_reader :logger
 
-      def initialize(region:, cluster:, cluster_to_asg:, desired_capacity:, logger: nil)
+      def initialize(region:, cluster:, cluster_to_asg:, desired_capacity:, logger:)
         @region = region
         @cluster = cluster
         @cluster_to_asg = cluster_to_asg
@@ -24,7 +24,7 @@ module EcsDeploy
       def increase
         asg = as_client.describe_auto_scaling_groups(auto_scaling_group_names: [@asg_name]).auto_scaling_groups.first
 
-        @logger&.info("Increase desired capacity of #{@asg_name}: #{asg.desired_capacity} => #{asg.max_size}")
+        @logger.info("Increase desired capacity of #{@asg_name}: #{asg.desired_capacity} => #{asg.max_size}")
         as_client.update_auto_scaling_group(auto_scaling_group_name: @asg_name, desired_capacity: asg.max_size)
 
         # Run in background because increasing instances may take time
@@ -33,10 +33,10 @@ module EcsDeploy
             cluster = ecs_client.describe_clusters(clusters: [@cluster]).clusters.first
             instance_count = cluster.registered_container_instances_count
             if instance_count == asg.max_size
-              @logger&.info("Succeeded to increase instance count!")
+              @logger.info("Succeeded to increase instance count!")
               break
             end
-            @logger&.info("Current registered instance count: #{instance_count}")
+            @logger.info("Current registered instance count: #{instance_count}")
             sleep 5
           end
         end
@@ -47,10 +47,10 @@ module EcsDeploy
 
         decrease_count = asg.desired_capacity - @desired_capacity
         if decrease_count <= 0
-          @logger&.info("The capacity is already #{asg.desired_capacity}")
+          @logger.info("The capacity is already #{asg.desired_capacity}")
           return
         end
-        @logger&.info("Decrease desired capacity of #{@asg_name}: #{asg.desired_capacity} => #{@desired_capacity}")
+        @logger.info("Decrease desired capacity of #{@asg_name}: #{asg.desired_capacity} => #{@desired_capacity}")
 
         container_instance_arns = ecs_client.list_container_instances(
           cluster: @cluster
@@ -90,7 +90,7 @@ module EcsDeploy
 
         instance_ids = target_container_instances.map(&:ec2_instance_id)
         terminate_instances(instance_ids)
-        @logger&.info("Succeeded to decrease instances!")
+        @logger.info("Succeeded to decrease instances!")
       end
 
       private
@@ -131,12 +131,12 @@ module EcsDeploy
           end
           ecs_client.wait_until(:tasks_stopped, cluster: @cluster, tasks: running_task_arns)
         end
-        @logger&.info("Task #{arn.split('/').last} stopped")
+        @logger.info("Task #{arn.split('/').last} stopped")
       end
 
       def terminate_instances(instance_ids)
         if instance_ids.empty?
-          @logger&.info("There are no instances to terminate.")
+          @logger.info("There are no instances to terminate.")
           return
         end
         instance_ids.each_slice(20) do |ids|
@@ -153,9 +153,9 @@ module EcsDeploy
           instances = ec2_client.describe_instances(instance_ids: instance_ids).reservations.flat_map(&:instances)
           break if instances.all? {|instance| instance.state.name == "terminated" }
 
-          @logger&.info("Waiting for stopping all instances...")
+          @logger.info("Waiting for stopping all instances...")
           instances.sort_by(&:instance_id).each do |instance|
-            @logger&.info("#{instance.instance_id}\t#{instance.state.name}")
+            @logger.info("#{instance.instance_id}\t#{instance.state.name}")
           end
           sleep 10
         end
