@@ -188,7 +188,7 @@ namespace :ecs do
     end
   end
 
-  task increase_instances: [:configure] do
+  task increase_instances_to_max_size: [:configure] do
     configs = fetch(:ecs_instance_fluctuation_manager_configs, [])
     unless configs.empty?
       regions = Array(fetch(:ecs_region))
@@ -209,7 +209,7 @@ namespace :ecs do
     end
   end
 
-  task decrease_instances: [:configure] do
+  task terminate_redundant_instances: [:configure] do
     configs = fetch(:ecs_instance_fluctuation_manager_configs, [])
     unless configs.empty?
       regions = Array(fetch(:ecs_region))
