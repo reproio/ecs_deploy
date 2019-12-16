@@ -67,10 +67,8 @@ module EcsDeploy
           @logger.info("There are no instances to terminate.")
           return
         end
-        target_container_instances = decrease_count.times.map do |i|
-          az = az_to_container_instances.keys[i % az_to_container_instances.size]
-          az_to_container_instances[az].pop
-        end
+
+        target_container_instances = extract_target_container_instances(decrease_count, az_to_container_instances)
 
         threads = []
         target_container_instances.map(&:container_instance_arn).each_slice(10) do |arns|
@@ -120,6 +118,23 @@ module EcsDeploy
           region: @region,
           logger: @logger
         )
+      end
+
+      # Extract container instances to terminate considering AZ balance
+      def extract_target_container_instances(decrease_count, az_to_container_instances)
+        target_container_instances = []
+        decrease_count.times do
+          @logger.debug do
+            "AZ balance: #{az_to_container_instances.sort_by {|az, _| az }.map {|az, instances| [az, instances.size] }.to_h}"
+          end
+          az = az_to_container_instances.max_by {|_az, instances| instances.size }.first
+          target_container_instances << az_to_container_instances[az].pop
+        end
+        @logger.info do
+          "AZ balance: #{az_to_container_instances.sort_by {|az, _| az }.map {|az, instances| [az, instances.size] }.to_h}"
+        end
+
+        target_container_instances
       end
 
       def stop_tasks(arn)
