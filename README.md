@@ -464,18 +464,17 @@ set :ecs_instance_fluctuation_manager_configs, [
 ]
 ```
 
-This configuration enables tasks `ecs:increase_instances` and `ecs:decrease_instances`.
+This configuration enables tasks `ecs:increase_instances_to_max_size` and `ecs:terminate_redundant_instances`.
 If this configuration is not set, the above tasks do nothing.
-The task `ecs:increase_instances` will increase ECS instances.
-The task `ecs:decrease_instances` will decrease ECS instances considering AZ balance.
+The task `ecs:increase_instances_to_max_size` will increase ECS instances.
+The task `ecs:terminate_redundant_instances` will decrease ECS instances considering AZ balance.
 
 Hook configuration example:
 
 ```ruby
-after "deploy:updating", "ecs:increase_instances"
-after "deploy:finished", "ecs:decrease_instances"
-after "deploy:failed", "ecs:decrease_instances"
-after "ecs:rollback", "ecs:decrease_instances"
+after "deploy:updating", "ecs:increase_instances_to_max_size"
+after "deploy:finished", "ecs:terminate_redundant_instances"
+after "deploy:failed", "ecs:terminate_redundant_instances"
 ```
 
 ## Development
