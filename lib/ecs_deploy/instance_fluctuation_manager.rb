@@ -3,7 +3,6 @@ require "aws-sdk-ec2"
 require "aws-sdk-ecs"
 
 module EcsDeploy
-  module AutoScaler
     class InstanceFluctuationManager
       attr_reader :logger
 
@@ -176,5 +175,4 @@ module EcsDeploy
         end
       end
     end
-  end
 end
