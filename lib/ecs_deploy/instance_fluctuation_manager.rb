@@ -34,7 +34,7 @@ module EcsDeploy
           cluster = ecs_client.describe_clusters(clusters: [@cluster]).clusters.first
           instance_count = cluster.registered_container_instances_count
           if instance_count == asg.max_size
-            @logger.info("Succeeded to increase instance count!")
+            @logger.info("Succeeded in increasing instances!")
             break
           end
           @logger.info("Current registered instance count: #{instance_count}")
@@ -89,7 +89,7 @@ module EcsDeploy
 
       instance_ids = target_container_instances.map(&:ec2_instance_id)
       terminate_instances(instance_ids)
-      @logger.info("Succeeded to decrease instances!")
+      @logger.info("Succeeded in decreasing instances!")
     end
 
     private
