@@ -147,7 +147,7 @@ module EcsDeploy
         end
         ecs_client.wait_until(:tasks_stopped, cluster: @cluster, tasks: running_task_arns)
       end
-      @logger.info("Task #{arn.split('/').last} stopped")
+      @logger.info("Tasks running on #{arn.split('/').last} stopped")
     end
 
     def terminate_instances(instance_ids)
