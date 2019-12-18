@@ -2,9 +2,9 @@ require "spec_helper"
 
 require "logger"
 require "stringio"
-require "ecs_deploy/auto_scaler/instance_fluctuation_manager"
+require "ecs_deploy/instance_fluctuation_manager"
 
-RSpec.describe EcsDeploy::AutoScaler::InstanceFluctuationManager do
+RSpec.describe EcsDeploy::InstanceFluctuationManager do
   let(:logdev) do
     StringIO.new
   end
