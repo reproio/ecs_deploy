@@ -139,20 +139,13 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
         allow(ecs_client).to receive(:wait_until)
         expect(ecs_client).to receive(:stop_task).at_most(arns.size * tasks.size).times
 
-        state_terminated = Aws::EC2::Types::InstanceState.new(code: 48, name: "terminated")
         Aws.config[:ec2] = {
           stub_responses: {
-            describe_instances: lambda do |_|
-              Aws::EC2::Types::DescribeInstancesResult.new(
-                reservations: [
-                  Aws::EC2::Types::Reservation.new(instances: [Aws::EC2::Types::Instance.new(state: state_terminated, instance_id: "instance_id")])
-                ]
-              )
-            end
+            terminate_instances: {}
           }
         }
-
-        allow(instance_fluctuation_manager).to receive(:sleep)
+        ec2_client = instance_fluctuation_manager.send(:ec2_client)
+        allow(ec2_client).to receive(:wait_until)
       end
 
       it "succeeded in decreasing instances" do
@@ -235,20 +228,13 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
         allow(ecs_client).to receive(:wait_until)
         expect(ecs_client).to receive(:stop_task).at_most(arns.size * tasks.size).times
 
-        state_terminated = Aws::EC2::Types::InstanceState.new(code: 48, name: "terminated")
         Aws.config[:ec2] = {
           stub_responses: {
-            describe_instances: lambda do |_|
-              Aws::EC2::Types::DescribeInstancesResult.new(
-                reservations: [
-                  Aws::EC2::Types::Reservation.new(instances: [Aws::EC2::Types::Instance.new(state: state_terminated, instance_id: "instance_id")])
-                ]
-              )
-            end
+            terminate_instances: {}
           }
         }
-
-        allow(instance_fluctuation_manager).to receive(:sleep)
+        ec2_client = instance_fluctuation_manager.send(:ec2_client)
+        allow(ec2_client).to receive(:wait_until)
       end
 
       context "desired capacity is multiple of 3" do

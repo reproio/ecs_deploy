@@ -165,15 +165,14 @@ module EcsDeploy
 
       ec2_client.terminate_instances(instance_ids: instance_ids)
 
-      loop do
-        instances = ec2_client.describe_instances(instance_ids: instance_ids).reservations.flat_map(&:instances)
-        break if instances.all? {|instance| instance.state.name == "terminated" }
-
-        @logger.info("Waiting for stopping all instances...")
-        instances.sort_by(&:instance_id).each do |instance|
-          @logger.info("#{instance.instance_id}\t#{instance.state.name}")
+      ec2_client.wait_until(:instance_terminated, instance_ids: instance_ids) do |w|
+        w.before_wait do |attempts, response|
+          @logger.info("Waiting for stopping all instances...#{attempts}")
+          instances = response.reservations.flat_map(&:instances)
+          instances.sort_by(&:instance_id).each do |instance|
+            @logger.info("#{instance.instance_id}\t#{instance.state.name}")
+          end
         end
-        sleep 10
       end
     end
   end
