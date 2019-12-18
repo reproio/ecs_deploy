@@ -72,6 +72,7 @@ module EcsDeploy
       target_container_instances = extract_target_container_instances(decrease_count, az_to_container_instances)
 
       threads = []
+      all_running_task_arns = []
       target_container_instances.map(&:container_instance_arn).each_slice(MAX_DESCRIBABLE_CONTAINER_COUNT) do |arns|
         ecs_client.update_container_instances_state(
           cluster: @cluster,
@@ -80,12 +81,14 @@ module EcsDeploy
         )
         arns.each do |arn|
           threads << Thread.new(arn) do |a|
-            stop_tasks(a)
+            all_running_task_arns.concat(stop_tasks(a))
           end
         end
       end
 
       threads.each(&:join)
+      ecs_client.wait_until(:tasks_stopped, cluster: @cluster, tasks: all_running_task_arns)
+      @logger.info("All running tasks are stopped")
 
       instance_ids = target_container_instances.map(&:ec2_instance_id)
       terminate_instances(instance_ids)
@@ -147,7 +150,8 @@ module EcsDeploy
         end
         ecs_client.wait_until(:tasks_stopped, cluster: @cluster, tasks: running_task_arns)
       end
-      @logger.info("Tasks running on #{arn.split('/').last} stopped")
+      @logger.info("Tasks running on #{arn.split('/').last} will be stopped")
+      running_task_arns
     end
 
     def terminate_instances(instance_ids)
