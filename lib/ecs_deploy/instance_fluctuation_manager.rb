@@ -8,25 +8,19 @@ module EcsDeploy
 
     MAX_DESCRIBABLE_CONTAINER_COUNT = 10
 
-    def initialize(region:, cluster:, cluster_to_asg:, desired_capacity:, logger:)
+    def initialize(region:, cluster:, auto_scaling_group_name:, desired_capacity:, logger:)
       @region = region
       @cluster = cluster
-      @cluster_to_asg = cluster_to_asg
+      @auto_scaling_group_name = auto_scaling_group_name
       @desired_capacity = desired_capacity
       @logger = logger
-
-      unless cluster_to_asg.key?(cluster)
-        raise ArgumentError, "Unknown cluster: #{cluster}"
-      end
-
-      @asg_name = cluster_to_asg[cluster]
     end
 
     def increase
-      asg = as_client.describe_auto_scaling_groups(auto_scaling_group_names: [@asg_name]).auto_scaling_groups.first
+      asg = as_client.describe_auto_scaling_groups(auto_scaling_group_names: [@auto_scaling_group_name]).auto_scaling_groups.first
 
-      @logger.info("Increase desired capacity of #{@asg_name}: #{asg.desired_capacity} => #{asg.max_size}")
-      as_client.update_auto_scaling_group(auto_scaling_group_name: @asg_name, desired_capacity: asg.max_size)
+      @logger.info("Increase desired capacity of #{@auto_scaling_group_name}: #{asg.desired_capacity} => #{asg.max_size}")
+      as_client.update_auto_scaling_group(auto_scaling_group_name: @auto_scaling_group_name, desired_capacity: asg.max_size)
 
       # Run in background because increasing instances may take time
       Thread.new do
@@ -44,14 +38,14 @@ module EcsDeploy
     end
 
     def decrease
-      asg = as_client.describe_auto_scaling_groups(auto_scaling_group_names: [@asg_name]).auto_scaling_groups.first
+      asg = as_client.describe_auto_scaling_groups(auto_scaling_group_names: [@auto_scaling_group_name]).auto_scaling_groups.first
 
       decrease_count = asg.desired_capacity - @desired_capacity
       if decrease_count <= 0
         @logger.info("The capacity is already #{asg.desired_capacity}")
         return
       end
-      @logger.info("Decrease desired capacity of #{@asg_name}: #{asg.desired_capacity} => #{@desired_capacity}")
+      @logger.info("Decrease desired capacity of #{@auto_scaling_group_name}: #{asg.desired_capacity} => #{@desired_capacity}")
 
       container_instance_arns = ecs_client.list_container_instances(
         cluster: @cluster
@@ -157,7 +151,7 @@ module EcsDeploy
       end
       instance_ids.each_slice(20) do |ids|
         as_client.detach_instances(
-          auto_scaling_group_name: @asg_name,
+          auto_scaling_group_name: @auto_scaling_group_name,
           instance_ids: ids,
           should_decrement_desired_capacity: true
         )

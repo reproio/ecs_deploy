@@ -458,7 +458,7 @@ set :ecs_instance_fluctuation_manager_configs, [
   {
     region: "ap-northeast-1",
     cluster: "CLUSTER_NAME",
-    cluster_to_asg: { "CLUSTER_NAME" => "AUTO_SCALING_GROUP_NAME" },
+    auto_scaling_group_name: "AUTO_SCALING_GROUP_NAME",
     desired_capacity: 20, # original capacity of auto scaling group
   }
 ]

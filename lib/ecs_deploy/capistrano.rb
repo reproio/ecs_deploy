@@ -199,7 +199,7 @@ namespace :ecs do
           m = EcsDeploy::InstanceFluctuationManager.new(
             region: config[:region] || region,
             cluster: config[:cluster] || fetch(:ecs_default_cluster),
-            cluster_to_asg: config[:cluster_to_asg],
+            auto_scaling_group_name: config[:auto_scaling_group_name],
             desired_capacity: config[:desired_capacity],
             logger: logger
           )
@@ -220,7 +220,7 @@ namespace :ecs do
           m = EcsDeploy::InstanceFluctuationManager.new(
             region: config[:region] || region,
             cluster: config[:cluster] || fetch(:ecs_default_cluster),
-            cluster_to_asg: config[:cluster_to_asg],
+            auto_scaling_group_name: config[:auto_scaling_group_name],
             desired_capacity: config[:desired_capacity],
             logger: logger
           )

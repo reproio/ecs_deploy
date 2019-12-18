@@ -12,7 +12,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
     described_class.new(
       region: "ap-northeast-1",
       cluster: "cluster",
-      cluster_to_asg: { "cluster" => "asg-cluster", "cluster2" => "asg-cluster2" },
+      auto_scaling_group_name: "asg-cluster",
       desired_capacity: 50,
       logger: ::Logger.new(logdev)
     )
@@ -242,7 +242,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
           described_class.new(
             region: "ap-northeast-1",
             cluster: "cluster",
-            cluster_to_asg: { "cluster" => "asg-cluster", "cluster2" => "asg-cluster2" },
+            auto_scaling_group_name: "asg-cluster",
             desired_capacity: 60,
             logger: ::Logger.new(logdev)
           )
@@ -263,7 +263,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
           described_class.new(
             region: "ap-northeast-1",
             cluster: "cluster",
-            cluster_to_asg: { "cluster" => "asg-cluster", "cluster2" => "asg-cluster2" },
+            auto_scaling_group_name: "asg-cluster",
             desired_capacity: 53,
             logger: ::Logger.new(logdev)
           )
