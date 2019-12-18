@@ -81,7 +81,7 @@ module EcsDeploy
       end
 
       threads.each(&:join)
-      ecs_client.wait_until(:tasks_stopped, cluster: @cluster, tasks: all_running_task_arns)
+      ecs_client.wait_until(:tasks_stopped, cluster: @cluster, tasks: all_running_task_arns) unless all_running_task_arns.empty?
       @logger.info("All running tasks are stopped")
 
       instance_ids = target_container_instances.map(&:ec2_instance_id)
