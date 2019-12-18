@@ -97,6 +97,17 @@ module EcsDeploy
 
     private
 
+    def aws_params
+      {
+        access_key_id: EcsDeploy.config.access_key_id,
+        secret_access_key: EcsDeploy.config.secret_access_key,
+        region: @region,
+        logger: @logger
+      }.reject do |_key, value|
+        value.nil?
+      end
+    end
+
     def as_client
       @as_client ||= Aws::AutoScaling::Client.new(
         access_key_id: EcsDeploy.config.access_key_id,
