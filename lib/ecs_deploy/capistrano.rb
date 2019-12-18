@@ -1,5 +1,5 @@
 require 'ecs_deploy'
-require 'ecs_deploy/auto_scaler/instance_fluctuation_manager'
+require 'ecs_deploy/instance_fluctuation_manager'
 
 namespace :ecs do
   task :configure do
@@ -196,7 +196,7 @@ namespace :ecs do
       regions.each do |region|
         configs.each do |config|
           logger = config.fetch(:logger, EcsDeploy.logger)
-          m = EcsDeploy::AutoScaler::InstanceFluctuationManager.new(
+          m = EcsDeploy::InstanceFluctuationManager.new(
             region: config[:region] || region,
             cluster: config[:cluster] || fetch(:ecs_default_cluster),
             cluster_to_asg: config[:cluster_to_asg],
@@ -217,7 +217,7 @@ namespace :ecs do
       regions.each do |region|
         configs.each do |config|
           logger = config.fetch(:logger, EcsDeploy.logger)
-          m = EcsDeploy::AutoScaler::InstanceFluctuationManager.new(
+          m = EcsDeploy::InstanceFluctuationManager.new(
             region: config[:region] || region,
             cluster: config[:cluster] || fetch(:ecs_default_cluster),
             cluster_to_asg: config[:cluster_to_asg],
