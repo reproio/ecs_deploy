@@ -109,30 +109,15 @@ module EcsDeploy
     end
 
     def as_client
-      @as_client ||= Aws::AutoScaling::Client.new(
-        access_key_id: EcsDeploy.config.access_key_id,
-        secret_access_key: EcsDeploy.config.secret_access_key,
-        region: @region,
-        logger: @logger
-      )
+      @as_client ||= Aws::AutoScaling::Client.new(aws_params)
     end
 
     def ec2_client
-      @ec2_client ||= Aws::EC2::Client.new(
-        access_key_id: EcsDeploy.config.access_key_id,
-        secret_access_key: EcsDeploy.config.secret_access_key,
-        region: @region,
-        logger: @logger
-      )
+      @ec2_client ||= Aws::EC2::Client.new(aws_params)
     end
 
     def ecs_client
-      @ecs_client ||= Aws::ECS::Client.new(
-        access_key_id: EcsDeploy.config.access_key_id,
-        secret_access_key: EcsDeploy.config.secret_access_key,
-        region: @region,
-        logger: @logger
-      )
+      @ecs_client ||= Aws::ECS::Client.new(aws_params)
     end
 
     # Extract container instances to terminate considering AZ balance
