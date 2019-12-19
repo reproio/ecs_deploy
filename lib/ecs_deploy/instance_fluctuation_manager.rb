@@ -138,7 +138,6 @@ module EcsDeploy
         running_tasks.each do |task|
           ecs_client.stop_task(cluster: @cluster, task: task.task_arn) if task.group.start_with?("family:")
         end
-        ecs_client.wait_until(:tasks_stopped, cluster: @cluster, tasks: running_task_arns)
       end
       @logger.info("Tasks running on #{arn.split('/').last} will be stopped")
       running_task_arns
