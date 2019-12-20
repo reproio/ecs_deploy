@@ -1,4 +1,5 @@
 require 'ecs_deploy'
+require 'ecs_deploy/instance_fluctuation_manager'
 
 namespace :ecs do
   task :configure do
@@ -183,6 +184,48 @@ namespace :ecs do
           s
         end
         EcsDeploy::Service.wait_all_running(services)
+      end
+    end
+  end
+
+  task increase_instances_to_max_size: [:configure] do
+    configs = fetch(:ecs_instance_fluctuation_manager_configs, [])
+    unless configs.empty?
+      regions = Array(fetch(:ecs_region))
+      regions = [EcsDeploy.config.default_region] if regions.empty?
+      regions.each do |region|
+        configs.each do |config|
+          logger = config.fetch(:logger, EcsDeploy.logger)
+          m = EcsDeploy::InstanceFluctuationManager.new(
+            region: config[:region] || region,
+            cluster: config[:cluster] || fetch(:ecs_default_cluster),
+            auto_scaling_group_name: config[:auto_scaling_group_name],
+            desired_capacity: config[:desired_capacity],
+            logger: logger
+          )
+          m.increase
+        end
+      end
+    end
+  end
+
+  task terminate_redundant_instances: [:configure] do
+    configs = fetch(:ecs_instance_fluctuation_manager_configs, [])
+    unless configs.empty?
+      regions = Array(fetch(:ecs_region))
+      regions = [EcsDeploy.config.default_region] if regions.empty?
+      regions.each do |region|
+        configs.each do |config|
+          logger = config.fetch(:logger, EcsDeploy.logger)
+          m = EcsDeploy::InstanceFluctuationManager.new(
+            region: config[:region] || region,
+            cluster: config[:cluster] || fetch(:ecs_default_cluster),
+            auto_scaling_group_name: config[:auto_scaling_group_name],
+            desired_capacity: config[:desired_capacity],
+            logger: logger
+          )
+          m.decrease
+        end
       end
     end
   end
