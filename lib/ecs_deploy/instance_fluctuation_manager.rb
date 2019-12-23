@@ -6,7 +6,7 @@ module EcsDeploy
   class InstanceFluctuationManager
     attr_reader :logger
 
-    MAX_DESCRIBABLE_ECS_CONTAINER_COUNT = 10
+    MAX_UPDATABLE_ECS_CONTAINER_COUNT = 10
 
     def initialize(region:, cluster:, auto_scaling_group_name:, desired_capacity:, logger:)
       @region = region
@@ -67,7 +67,7 @@ module EcsDeploy
 
       threads = []
       all_running_task_arns = []
-      target_container_instances.map(&:container_instance_arn).each_slice(MAX_DESCRIBABLE_ECS_CONTAINER_COUNT) do |arns|
+      target_container_instances.map(&:container_instance_arn).each_slice(MAX_UPDATABLE_ECS_CONTAINER_COUNT) do |arns|
         ecs_client.update_container_instances_state(
           cluster: @cluster,
           container_instances: arns,
