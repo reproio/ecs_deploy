@@ -6,7 +6,8 @@ module EcsDeploy
   class InstanceFluctuationManager
     attr_reader :logger
 
-    MAX_DESCRIBABLE_ECS_CONTAINER_COUNT = 10
+    MAX_UPDATABLE_ECS_CONTAINER_COUNT = 10
+    MAX_DETACHEABLE_EC2_INSTACE_COUNT = 20
 
     def initialize(region:, cluster:, auto_scaling_group_name:, desired_capacity:, logger:)
       @region = region
@@ -67,7 +68,7 @@ module EcsDeploy
 
       threads = []
       all_running_task_arns = []
-      target_container_instances.map(&:container_instance_arn).each_slice(MAX_DESCRIBABLE_ECS_CONTAINER_COUNT) do |arns|
+      target_container_instances.map(&:container_instance_arn).each_slice(MAX_UPDATABLE_ECS_CONTAINER_COUNT) do |arns|
         ecs_client.update_container_instances_state(
           cluster: @cluster,
           container_instances: arns,
@@ -148,7 +149,7 @@ module EcsDeploy
         @logger.info("There are no instances to terminate.")
         return
       end
-      instance_ids.each_slice(20) do |ids|
+      instance_ids.each_slice(MAX_DETACHEABLE_EC2_INSTACE_COUNT) do |ids|
         as_client.detach_instances(
           auto_scaling_group_name: @auto_scaling_group_name,
           instance_ids: ids,
