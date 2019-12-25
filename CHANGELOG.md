@@ -33,7 +33,7 @@
 * Wait for stopping tasks until tasks stop
   https://github.com/reproio/ecs_deploy/pull/50
 * Improve performance when start tasks
-  https://github.com/reproio/ecs_deploy/pull/50
+  https://github.com/reproio/ecs_deploy/pull/53
 * Improve stability of auto scaling groups managed by ecs_auto_scaler
   https://github.com/reproio/ecs_deploy/pull/55
 
