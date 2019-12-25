@@ -70,6 +70,8 @@
 ### Enhancement
 
 * Support network_mode and placement_constraints
+* Introduce `ecs_registered_tasks` capistrano variable
+  https://github.com/reproio/ecs_deploy/pull/23
 
 ### Bug fixes
 
