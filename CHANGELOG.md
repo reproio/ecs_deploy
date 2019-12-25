@@ -51,6 +51,13 @@
 
 * Remove execution feature
   https://github.com/reproio/ecs_deploy/pull/24
+* Support container overrides in scheduled tasks
+  https://github.com/reproio/ecs_deploy/pull/26
+
+### Bug fixes
+
+* Fix deployment errors that occur when `ecs_scheduled_tasks` is not set
+  https://github.com/reproio/ecs_deploy/pull/27
 
 ## Release v0.3.1 - 2017/04/08
 
