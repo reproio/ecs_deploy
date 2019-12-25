@@ -43,6 +43,7 @@
   https://github.com/reproio/ecs_deploy/pull/38
 * Fix errors that occur on decreasing more than 20 container instances
   https://github.com/reproio/ecs_deploy/pull/39
+
 # Ancient releases
 
 ## Release v0.3.2 - 2017/23/10
