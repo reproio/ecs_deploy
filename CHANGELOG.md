@@ -67,6 +67,11 @@
 
 ## Release v0.3.0 - 2017/03/08
 
+### New feature
+
+* Support ScheduledTask deployment
+  https://github.com/reproio/ecs_deploy/pull/22
+
 ### Enhancement
 
 * Support network_mode and placement_constraints
@@ -80,8 +85,6 @@
 * Wait 10 services at once
   https://github.com/reproio/ecs_deploy/pull/20
   https://github.com/reproio/ecs_deploy/pull/21
-* Support ScheduledTask deployment
-  https://github.com/reproio/ecs_deploy/pull/22
 
 ## Release v0.2.0 - 2016/31/10
 
