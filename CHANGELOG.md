@@ -72,7 +72,7 @@
 
 * Support task role arn
   https://github.com/reproio/ecs_deploy/pull/13
-* Make shutdown process safe
+* Make the scale-in process safe
   https://github.com/reproio/ecs_deploy/pull/14
 * Support ALB
   https://github.com/reproio/ecs_deploy/pull/15
