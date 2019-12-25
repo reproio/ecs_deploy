@@ -35,6 +35,12 @@
 * Improve stability of auto scaling groups managed by ecs_auto_scaler
   https://github.com/reproio/ecs_deploy/pull/55
 
+### Bug fixes
+
+* Fix infinite loop that occurs when there are more than 100 container instances
+  https://github.com/reproio/ecs_deploy/pull/38
+* Fix errors that occur on decreasing more than 20 container instances
+  https://github.com/reproio/ecs_deploy/pull/39
 # Ancient releases
 
 ## Release v0.3.2 - 2017/23/10
