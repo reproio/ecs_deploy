@@ -13,7 +13,7 @@
   https://github.com/reproio/ecs_deploy/pull/30
 * Detect region automatically according to AWS SDK
   https://github.com/reproio/ecs_deploy/pull/31
-* Support new features of ECS to add Fargate support
+* Support new features of ECS to support Fargate
   https://github.com/reproio/ecs_deploy/pull/32
 * Ignore running tasks which don't belong to the ECS services on deregistering container instances
   https://github.com/reproio/ecs_deploy/pull/33
