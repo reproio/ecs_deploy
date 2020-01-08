@@ -137,21 +137,6 @@ module EcsDeploy
       end
     end
 
-    def wait_running
-      return if @response.nil?
-
-      service = @response.service
-
-      @client.wait_until(:services_stable, cluster: @cluster, services: [service.service_name]) do |w|
-        w.delay = EcsDeploy.config.ecs_wait_until_services_stable_delay if EcsDeploy.config.ecs_wait_until_services_stable_delay
-        w.max_attempts = EcsDeploy.config.ecs_wait_until_services_stable_max_attempts if EcsDeploy.config.ecs_wait_until_services_stable_max_attempts
-
-        w.before_attempt do
-          EcsDeploy.logger.info "wait service stable [#{service.service_name}]"
-        end
-      end
-    end
-
     def self.wait_all_running(services)
       services.group_by { |s| [s.cluster, s.region] }.each do |(cl, region), ss|
         client = Aws::ECS::Client.new(region: region)
