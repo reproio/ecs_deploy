@@ -13,6 +13,9 @@ module EcsDeploy
     def initialize
       @log_level = :info
       @deploy_wait_timeout = 300
+      # The following values are the default values of Aws::ECS::Waiters::ServicesStable
+      @ecs_wait_until_services_stable_max_attempts = 40
+      @ecs_wait_until_services_stable_delay = 15
     end
   end
 end
