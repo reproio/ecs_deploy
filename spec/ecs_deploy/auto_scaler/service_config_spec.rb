@@ -11,10 +11,10 @@ RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
 
     subject(:service_config) do
       described_class.new({
-        "name"    => service_name,
+        "name"    => "service_name",
         "cluster" => "cluster",
         "region"  => "ap-northeast-1",
-        "step"    => default_step,
+        "step"    => 1,
         "max_task_count" => 100,
         "min_task_count" => 1,
         "cooldown_time_for_reach_max" => 300,
@@ -37,19 +37,26 @@ RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
             "step"       => 1,
           },
         ],
-        "downscale_triggers" => [
-          {
-            "alarm_name" => "downscale_trigger_with_step_2",
-            "region"     => "ap-northeast-1",
-            "state"      => "ALARM",
-            "step"       => 2,
-          },
-        ],
+        "downscale_triggers" => downscale_triggers,
       }, Logger.new(nil))
     end
+    let(:downscale_triggers) do
+      [
+        {
+          "alarm_name" => "downscale_trigger_with_step_2",
+          "region"     => "ap-northeast-1",
+          "state"      => "ALARM",
+          "step"       => 2,
+        },
+        {
+          "alarm_name" => "downscale_trigger_with_step_1",
+          "region"     => "ap-northeast-1",
+          "state"      => "ALARM",
+          "step"       => 1,
+        },
+      ]
+    end
 
-    let(:service_name) { "service_name" }
-    let(:default_step) { 1 }
     let(:initial_desired_count) { 1 }
     let(:ecs_client) { instance_double("Aws::ECS::Client") }
 
@@ -80,6 +87,48 @@ RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
       end
     end
 
+    context "when a downscale trigger exists and all triggers match" do
+      let(:initial_desired_count) { 3 }
+      let(:downscale_triggers) do
+        [
+          {
+            "alarm_name" => "downscale_trigger_with_step_2",
+            "region"     => "ap-northeast-1",
+            "state"      => "ALARM",
+            "step"       => 2,
+          },
+          {
+            "alarm_name" => "downscale_trigger_with_step_1",
+            "region"     => "ap-northeast-1",
+            "state"      => "ALARM",
+            "step"       => 1,
+            "prioritized_over_upscale_triggers" => true,
+          },
+        ]
+      end
+
+      before do
+        (service_config.upscale_triggers + service_config.downscale_triggers).each do |trigger|
+          allow(trigger).to receive(:match?).and_return(true)
+        end
+      end
+
+      it "uses the maximum step of down triggers with prioritized_over_upscale_triggers true" do
+        expect(cluster_resource_manager).to receive(:release).with(1)
+        expect(ecs_client).to receive(:update_service).with(
+          cluster: service_config.cluster,
+          service: service_config.name,
+          desired_count: initial_desired_count - 1,
+        )
+
+        expect(ecs_client).to receive(:wait_until).with(:services_stable, cluster: service_config.cluster, services: [service_config.name])
+        expect(ecs_client).to receive(:list_tasks).and_return([double(task_arns: ["stopping_task_arn"])], [double(task_arns: [])])
+        expect(ecs_client).to receive(:wait_until).with(:tasks_stopped, cluster: service_config.cluster, tasks: ["stopping_task_arn"])
+
+        service_config.adjust_desired_count(cluster_resource_manager)
+      end
+    end
+
     context "when only a downscale trigger matches" do
       before do
         (service_config.upscale_triggers + service_config.downscale_triggers).each do |trigger|
@@ -91,7 +140,7 @@ RSpec.describe EcsDeploy::AutoScaler::ServiceConfig do
       context "when desired_count - step is greater than or equal to min_task_count" do
         let(:initial_desired_count) { 3 }
 
-        it "decreases desired_count by the step" do
+        it "uses the maximum step of down triggers" do
           expect(cluster_resource_manager).to receive(:release).with(2)
           expect(ecs_client).to receive(:update_service).with(
             cluster: service_config.cluster,

@@ -45,8 +45,9 @@ module EcsDeploy
           end
         end
 
-        if difference == 0 && desired_count > current_min_task_count
+        if desired_count > current_min_task_count
           downscale_triggers.each do |trigger|
+            next if difference > 0 && !trigger.prioritized_over_upscale_triggers?
             next unless trigger.match?
 
             @logger.info "#{log_prefix} Fire downscale trigger by #{trigger.alarm_name} #{trigger.state}"

@@ -5,8 +5,18 @@ require "ecs_deploy/auto_scaler/config_base"
 
 module EcsDeploy
   module AutoScaler
-    TriggerConfig = Struct.new(:alarm_name, :region, :state, :step) do
+    TriggerConfig = Struct.new(:alarm_name, :region, :state, :step, :prioritized_over_upscale_triggers) do
       include ConfigBase
+
+      def match?
+        fetch_alarm.state_value == state
+      end
+
+      def prioritized_over_upscale_triggers?
+        !!prioritized_over_upscale_triggers
+      end
+
+      private
 
       def client
         Aws::CloudWatch::Client.new(
@@ -15,10 +25,6 @@ module EcsDeploy
           region: region,
           logger: logger
         )
-      end
-
-      def match?
-        fetch_alarm.state_value == state
       end
 
       def fetch_alarm

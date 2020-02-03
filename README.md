@@ -257,6 +257,9 @@ spot_fleet_requests:
         downscale_triggers:
           - alarm_name: "ECS [repro-worker-production] CPUUtilization (low)"
             state: OK
+          - alarm_name: "Aurora DMLLatency is high"
+            state: ALARM
+            prioritized_over_upscale_triggers: true
 
 # If you specify `spot_instance_intrp_warns_queue_urls` as SQS queue for spot instance interruption warnings,
 # autoscaler will polls them and set the state of instances to be intrrupted to "DRAINING".
