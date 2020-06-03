@@ -55,18 +55,29 @@ module EcsDeploy
     end
 
     def register
-      res = @client.register_task_definition({
-        family: @task_definition_name,
-        network_mode: @network_mode,
-        container_definitions: @container_definitions,
-        volumes: @volumes,
-        placement_constraints: @placement_constraints,
-        task_role_arn: @task_role_arn,
-        execution_role_arn: @execution_role_arn,
-        requires_compatibilities: @requires_compatibilities,
-        cpu: @cpu, memory: @memory,
-        tags: @tags
-      })
+      res = nil
+      attempt = 0
+      begin
+        attempt += 1
+        res = @client.register_task_definition({
+          family: @task_definition_name,
+          network_mode: @network_mode,
+          container_definitions: @container_definitions,
+          volumes: @volumes,
+          placement_constraints: @placement_constraints,
+          task_role_arn: @task_role_arn,
+          execution_role_arn: @execution_role_arn,
+          requires_compatibilities: @requires_compatibilities,
+          cpu: @cpu, memory: @memory,
+          tags: @tags
+        })
+      rescue Aws::ECS::Errors::ThrottlingException
+        raise "Attempt limit exceeded" if attempt > 5
+
+        EcsDeploy.logger.info "register task definition [#{@task_definition_name}] [#{@region}] [#{Paint['NG', :red]}] [attempt=#{attempt}]"
+        sleep 1
+        retry
+      end
       EcsDeploy.logger.info "register task definition [#{@task_definition_name}] [#{@region}] [#{Paint['OK', :green]}]"
       res.task_definition
     end
