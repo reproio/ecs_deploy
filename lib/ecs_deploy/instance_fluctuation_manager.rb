@@ -50,11 +50,13 @@ module EcsDeploy
 
       container_instance_arns = ecs_client.list_container_instances(
         cluster: @cluster
-      ).container_instance_arns
-      container_instances = ecs_client.describe_container_instances(
-        cluster: @cluster,
-        container_instances: container_instance_arns
-      ).container_instances
+      ).flat_map(&:container_instance_arns)
+      container_instances = container_instance_arns.each_slice(100).flat_map do |arns|
+        ecs_client.describe_container_instances(
+          cluster: @cluster,
+          container_instances: arns
+        ).container_instances
+      end
 
       az_to_container_instances = container_instances.sort_by {|ci| - ci.running_tasks_count }.group_by do |ci|
         ci.attributes.find {|attribute| attribute.name == "ecs.availability-zone" }.value
