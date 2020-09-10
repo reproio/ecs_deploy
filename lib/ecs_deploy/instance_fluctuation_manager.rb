@@ -9,11 +9,12 @@ module EcsDeploy
     MAX_UPDATABLE_ECS_CONTAINER_COUNT = 10
     MAX_DETACHEABLE_EC2_INSTACE_COUNT = 20
 
-    def initialize(region:, cluster:, auto_scaling_group_name:, desired_capacity:, logger:)
+    def initialize(region:, cluster:, auto_scaling_group_name:, desired_capacity:, resume_az_rebalance:, logger:)
       @region = region
       @cluster = cluster
       @auto_scaling_group_name = auto_scaling_group_name
       @desired_capacity = desired_capacity
+      @resume_az_rebalance = resume_az_rebalance
       @logger = logger
     end
 
@@ -21,6 +22,7 @@ module EcsDeploy
       asg = fetch_auto_scaling_group
       current_instance_ids = asg.instances.map(&:instance_id)
 
+      as_client.suspend_processes(auto_scaling_group_name: @auto_scaling_group_name, scaling_processes: ["AZRebalance"])
       @logger.info("Increase desired capacity of #{@auto_scaling_group_name}: #{asg.desired_capacity} => #{asg.max_size}")
       as_client.update_auto_scaling_group(auto_scaling_group_name: @auto_scaling_group_name, desired_capacity: asg.max_size)
 
@@ -97,6 +99,10 @@ module EcsDeploy
 
       instance_ids = target_container_instances.map(&:ec2_instance_id)
       terminate_instances(instance_ids)
+
+      if @resume_az_rebalance
+        as_client.resume_processes(auto_scaling_group_name: @auto_scaling_group_name, scaling_processes: ["AZRebalance"])
+      end
       @logger.info("Succeeded in decreasing instances!")
     end
 

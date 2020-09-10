@@ -201,6 +201,7 @@ namespace :ecs do
             cluster: config[:cluster] || fetch(:ecs_default_cluster),
             auto_scaling_group_name: config[:auto_scaling_group_name],
             desired_capacity: config[:desired_capacity],
+            resume_az_rebalance: config[:resume_az_rebalance] || true,
             logger: logger
           )
           m.increase
@@ -222,6 +223,7 @@ namespace :ecs do
             cluster: config[:cluster] || fetch(:ecs_default_cluster),
             auto_scaling_group_name: config[:auto_scaling_group_name],
             desired_capacity: config[:desired_capacity],
+            resume_az_rebalance: config[:resume_az_rebalance] || true,
             logger: logger
           )
           m.decrease
