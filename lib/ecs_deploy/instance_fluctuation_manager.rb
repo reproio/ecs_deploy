@@ -140,13 +140,62 @@ module EcsDeploy
           "AZ balance: #{az_to_container_instances.sort_by {|az, _| az }.map {|az, instances| [az, instances.size] }.to_h}"
         end
         az = az_to_container_instances.max_by {|_az, instances| instances.size }.first
-        target_container_instances << az_to_container_instances[az].pop
+        az_to_container_instances[az].size.times do
+          target_container_instance_candidate = az_to_container_instances[az].pop
+          if can_terminate?(target_container_instance_candidate)
+            target_container_instances << target_container_instance_candidate
+            break
+          else
+            @logger.info("Cannot terminate container instance: #{target_container_instance_candidate}")
+            az_to_container_instances[az].unshift(target_container_instance_candidate)
+          end
+        end
+      end
+      if target_container_instances.size != decrease_count
+        @logger.info("target_container_instances.size != decrease_count #{target_container_instances.size} != #{decrease_count}")
       end
       @logger.info do
         "AZ balance: #{az_to_container_instances.sort_by {|az, _| az }.map {|az, instances| [az, instances.size] }.to_h}"
       end
 
       target_container_instances
+    end
+
+    def can_terminate?(container_instance)
+      task_arns = ecs_client.list_tasks(cluster: @cluster, container_instance: container_instance.container_instance_arn).flat_map(&:task_arns)
+      if task_arns.empty?
+        @logger.info("#{__method__}: task_arns are empty")
+        return true
+      end
+
+      tasks = task_arns.each_slice(100).flat_map {|arns| ecs_client.describe_tasks(cluster: @cluster, tasks: arns).tasks }
+      if tasks.empty?
+        @logger.info("#{__method__}: tasks are empty")
+        return true
+      end
+
+      if tasks.all? {|task| can_stop?(task) }
+        @logger.info("#{__method__}: task cannot stop")
+        return true
+      end
+
+      false
+    end
+
+    def can_stop?(task)
+      @task_arns ||= ecs_client.list_tasks(cluster: @cluster).flat_map(&:task_arns)
+      @tasks ||= task_arns.each_slice(100).flat_map {|arns| ecs_client.describe_tasks(cluster: @cluster, tasks: task_arns).tasks }
+
+      i = task.task_definition.rindex(":")
+      task_definition_prefix = task.task_definition[0..i]
+      other_tasks = @tasks.select {|t| t.task_definition.start_with?(task_definition_prefix) && t.task_definition != task.task_definition }
+
+      @logger.info do
+        messages = ["#{task.task_arn}: #{task.started_at}"]
+        messages.concat(other_tasks.map {|t| "#{t.task_arn}: #{t.started_at}" })
+        messages.join("\n")
+      end
+      other_tasks.all? {|t| t.started_at > task.started_at }
     end
 
     def stop_tasks(arn)
