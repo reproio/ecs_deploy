@@ -19,6 +19,7 @@ module EcsDeploy
 
     def increase
       asg = fetch_auto_scaling_group
+      current_instance_ids = asg.instances.map(&:instance_id)
 
       @logger.info("Increase desired capacity of #{@auto_scaling_group_name}: #{asg.desired_capacity} => #{asg.max_size}")
       as_client.update_auto_scaling_group(auto_scaling_group_name: @auto_scaling_group_name, desired_capacity: asg.max_size)
@@ -30,6 +31,11 @@ module EcsDeploy
           instance_count = cluster.registered_container_instances_count
           if instance_count == asg.max_size
             @logger.info("Succeeded in increasing instances!")
+            @logger.info do
+              asg = fetch_auto_scaling_group
+              all_instance_ids = asg.instances.map(&:instance_id)
+              "Newly added: #{all_instance_ids - current_instance_ids}"
+            end
             break
           end
           @logger.info("Current registered instance count: #{instance_count}")
@@ -51,12 +57,14 @@ module EcsDeploy
       container_instance_arns = ecs_client.list_container_instances(
         cluster: @cluster
       ).flat_map(&:container_instance_arns)
+      @logger.info("Container instance ARNs: #{container_instance_arns.size}")
       container_instances = container_instance_arns.each_slice(100).flat_map do |arns|
         ecs_client.describe_container_instances(
           cluster: @cluster,
           container_instances: arns
         ).container_instances
       end
+      @logger.info("Container instances: #{container_instances.size}")
 
       az_to_container_instances = container_instances.sort_by {|ci| - ci.running_tasks_count }.group_by do |ci|
         ci.attributes.find {|attribute| attribute.name == "ecs.availability-zone" }.value
@@ -124,6 +132,9 @@ module EcsDeploy
     # Extract container instances to terminate considering AZ balance
     def extract_target_container_instances(decrease_count, az_to_container_instances)
       target_container_instances = []
+      @logger.info do
+        "AZ balance: #{az_to_container_instances.sort_by {|az, _| az }.map {|az, instances| [az, instances.size] }.to_h}"
+      end
       decrease_count.times do
         @logger.debug do
           "AZ balance: #{az_to_container_instances.sort_by {|az, _| az }.map {|az, instances| [az, instances.size] }.to_h}"
