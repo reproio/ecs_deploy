@@ -8,6 +8,7 @@ module EcsDeploy
 
     MAX_UPDATABLE_ECS_CONTAINER_COUNT = 10
     MAX_DETACHEABLE_EC2_INSTACE_COUNT = 20
+    MAX_DESCRIBABLE_ECS_TASK_COUNT = 100
 
     def initialize(region:, cluster:, auto_scaling_group_name:, desired_capacity:, logger:)
       @region = region
@@ -56,6 +57,11 @@ module EcsDeploy
         container_instances: container_instance_arns
       ).container_instances
 
+      all_stopped_task_arns = container_instances.flat_map do |ci|
+        ecs_client.list_tasks(cluster: @cluster, container_instance: ci.container_instance_arn, desired_status: "STOPPED").flat_map(&:task_arns)
+      end
+      @logger.info("Stopped tasks: #{all_stopped_task_arns.size}")
+
       az_to_container_instances = container_instances.sort_by {|ci| - ci.running_tasks_count }.group_by do |ci|
         ci.attributes.find {|attribute| attribute.name == "ecs.availability-zone" }.value
       end
@@ -66,9 +72,14 @@ module EcsDeploy
 
       target_container_instances = extract_target_container_instances(decrease_count, az_to_container_instances)
 
+      @logger.info("running tasks: #{ecs_client.list_tasks(cluster: @cluster).task_arns.size}")
       threads = []
       all_running_task_arns = []
       target_container_instances.map(&:container_instance_arn).each_slice(MAX_UPDATABLE_ECS_CONTAINER_COUNT) do |arns|
+        @logger.info(arns)
+        arns.each do |arn|
+          all_running_task_arns.concat(ecs_client.list_tasks(cluster: @cluster, container_instance: arn).task_arns)
+        end
         ecs_client.update_container_instances_state(
           cluster: @cluster,
           container_instances: arns,
@@ -82,8 +93,7 @@ module EcsDeploy
       end
 
       threads.each(&:join)
-      ecs_client.wait_until(:tasks_stopped, cluster: @cluster, tasks: all_running_task_arns) unless all_running_task_arns.empty?
-      @logger.info("All running tasks are stopped")
+      wait_until_stop_old_tasks(all_stopped_task_arns + all_running_task_arns)
 
       instance_ids = target_container_instances.map(&:ec2_instance_id)
       terminate_instances(instance_ids)
@@ -132,8 +142,26 @@ module EcsDeploy
       target_container_instances
     end
 
+    def wait_until_stop_old_tasks(task_arns)
+      @logger.info("All old tasks: #{task_arns.size}")
+      running_tasks = task_arns.each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).flat_map do |arns|
+        ecs_client.describe_tasks(cluster: @cluster, tasks: arns).tasks
+      end.select do |task|
+        task.desired_status == "STOPPED" && task.last_status == "RUNNING"
+      end
+      threads = []
+      running_tasks.map(&:task_arn).each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).each do |chunk|
+        threads << Thread.new(chunk) do |arns|
+          ecs_client.wait_until(:tasks_stopped, cluster: @cluster, tasks: arns)
+        end
+      end
+      threads.each(&:join)
+      @logger.info("All old tasks are stopped")
+    end
+
     def stop_tasks(arn)
       running_task_arns = ecs_client.list_tasks(cluster: @cluster, container_instance: arn).task_arns
+      @logger.info("Running tasks: #{running_task_arns.size}")
       unless running_task_arns.empty?
         running_tasks = ecs_client.describe_tasks(cluster: @cluster, tasks: running_task_arns).tasks
         running_tasks.each do |task|
