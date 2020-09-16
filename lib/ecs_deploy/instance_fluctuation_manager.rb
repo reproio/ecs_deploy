@@ -19,7 +19,7 @@ module EcsDeploy
     end
 
     def increase
-      asg = as_client.describe_auto_scaling_groups(auto_scaling_group_names: [@auto_scaling_group_name]).auto_scaling_groups.first
+      asg = fetch_auto_scaling_group
 
       @logger.info("Increase desired capacity of #{@auto_scaling_group_name}: #{asg.desired_capacity} => #{asg.max_size}")
       as_client.update_auto_scaling_group(auto_scaling_group_name: @auto_scaling_group_name, desired_capacity: asg.max_size)
@@ -40,7 +40,7 @@ module EcsDeploy
     end
 
     def decrease
-      asg = as_client.describe_auto_scaling_groups(auto_scaling_group_names: [@auto_scaling_group_name]).auto_scaling_groups.first
+      asg = fetch_auto_scaling_group
 
       decrease_count = asg.desired_capacity - @desired_capacity
       if decrease_count <= 0
@@ -123,6 +123,10 @@ module EcsDeploy
 
     def ecs_client
       @ecs_client ||= Aws::ECS::Client.new(aws_params)
+    end
+
+    def fetch_auto_scaling_group
+      as_client.describe_auto_scaling_groups(auto_scaling_group_names: [@auto_scaling_group_name]).auto_scaling_groups.first
     end
 
     # Extract container instances to terminate considering AZ balance
