@@ -8,6 +8,7 @@ module EcsDeploy
 
     MAX_UPDATABLE_ECS_CONTAINER_COUNT = 10
     MAX_DETACHEABLE_EC2_INSTACE_COUNT = 20
+    MAX_DESCRIBABLE_ECS_CONTAINER_COUNT = 100
     MAX_DESCRIBABLE_ECS_TASK_COUNT = 100
 
     def initialize(region:, cluster:, auto_scaling_group_name:, desired_capacity:, logger:)
@@ -51,11 +52,13 @@ module EcsDeploy
 
       container_instance_arns = ecs_client.list_container_instances(
         cluster: @cluster
-      ).container_instance_arns
-      container_instances = ecs_client.describe_container_instances(
-        cluster: @cluster,
-        container_instances: container_instance_arns
-      ).container_instances
+      ).flat_map(&:container_instance_arns)
+      container_instances = container_instance_arns.each_slice(MAX_DESCRIBABLE_ECS_CONTAINER_COUNT).flat_map do |arns|
+        ecs_client.describe_container_instances(
+          cluster: @cluster,
+          container_instances: arns
+        ).container_instances
+      end
 
       all_stopped_task_arns = container_instances.flat_map do |ci|
         ecs_client.list_tasks(cluster: @cluster, container_instance: ci.container_instance_arn, desired_status: "STOPPED").flat_map(&:task_arns)
