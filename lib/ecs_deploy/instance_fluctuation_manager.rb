@@ -8,7 +8,6 @@ module EcsDeploy
 
     MAX_UPDATABLE_ECS_CONTAINER_COUNT = 10
     MAX_DETACHEABLE_EC2_INSTACE_COUNT = 20
-    MAX_DESCRIBABLE_ECS_CONTAINER_COUNT = 100
     MAX_DESCRIBABLE_ECS_TASK_COUNT = 100
 
     def initialize(region:, cluster:, auto_scaling_group_name:, desired_capacity:, logger:)
@@ -50,13 +49,10 @@ module EcsDeploy
       end
       @logger.info("Decrease desired capacity of #{@auto_scaling_group_name}: #{asg.desired_capacity} => #{@desired_capacity}")
 
-      container_instance_arns = ecs_client.list_container_instances(
-        cluster: @cluster
-      ).flat_map(&:container_instance_arns)
-      container_instances = container_instance_arns.each_slice(MAX_DESCRIBABLE_ECS_CONTAINER_COUNT).flat_map do |arns|
+      container_instances = ecs_client.list_container_instances(cluster: @cluster).flat_map do |resp|
         ecs_client.describe_container_instances(
           cluster: @cluster,
-          container_instances: arns
+          container_instances: resp.container_instance_arns
         ).container_instances
       end
 
