@@ -56,11 +56,6 @@ module EcsDeploy
         ).container_instances
       end
 
-      all_stopped_task_arns = container_instances.flat_map do |ci|
-        ecs_client.list_tasks(cluster: @cluster, container_instance: ci.container_instance_arn, desired_status: "STOPPED").flat_map(&:task_arns)
-      end
-      @logger.info("Stopped tasks: #{all_stopped_task_arns.size}")
-
       az_to_container_instances = container_instances.sort_by {|ci| - ci.running_tasks_count }.group_by do |ci|
         ci.attributes.find {|attribute| attribute.name == "ecs.availability-zone" }.value
       end
@@ -71,6 +66,8 @@ module EcsDeploy
 
       target_container_instances = extract_target_container_instances(decrease_count, az_to_container_instances)
 
+      all_stopped_task_arns = list_stopped_running_task_arns
+      @logger.info("stopped tasks: #{all_stopped_task_arns.size}")
       @logger.info("running tasks: #{ecs_client.list_tasks(cluster: @cluster).task_arns.size}")
       threads = []
       all_running_task_arns = []
@@ -143,6 +140,16 @@ module EcsDeploy
       end
 
       target_container_instances
+    end
+
+    # list tasks whoose desired_status is "STOPPED" but last_status is "RUNNING" in the ECS cluster
+    def list_stopped_running_task_arns
+      stopped_task_arns = ecs_client.list_tasks(cluster: @cluster, desired_status: "STOPPED").flat_map(&:task_arns)
+      stopped_task_arns.each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).flat_map do |arns|
+        ecs_client.describe_tasks(cluster: @cluster, tasks: arns).tasks.select do |task|
+          task.desired_status == "STOPPED" && task.last_status == "RUNNING"
+        end
+      end.map(&:task_arn)
     end
 
     def wait_until_stop_old_tasks(task_arns)
