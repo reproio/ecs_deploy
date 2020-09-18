@@ -180,7 +180,7 @@ module EcsDeploy
       @logger.info("Running tasks: #{running_task_arns.size}")
       unless running_task_arns.empty?
         running_task_arns.each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).each do |arns|
-          ecs_client.describe_tasks(cluster: @cluster, tasks: arns).each do |task|
+          ecs_client.describe_tasks(cluster: @cluster, tasks: arns).tasks.each do |task|
             ecs_client.stop_task(cluster: @cluster, task: task.task_arn) if task.group.start_with?("family:")
           end
         end
