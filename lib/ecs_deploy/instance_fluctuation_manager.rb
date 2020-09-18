@@ -69,7 +69,6 @@ module EcsDeploy
       all_stopped_task_arns = list_stopped_running_task_arns
       @logger.info("stopped tasks: #{all_stopped_task_arns.size}")
       @logger.info("running tasks: #{ecs_client.list_tasks(cluster: @cluster).task_arns.size}")
-      threads = []
       all_running_task_arns = []
       target_container_instances.map(&:container_instance_arn).each_slice(MAX_UPDATABLE_ECS_CONTAINER_COUNT) do |arns|
         @logger.info(arns)
@@ -82,13 +81,10 @@ module EcsDeploy
           status: "DRAINING"
         )
         arns.each do |arn|
-          threads << Thread.new(arn) do |a|
-            all_running_task_arns.concat(stop_tasks(a))
-          end
+          all_running_task_arns.concat(stop_tasks(arn))
         end
       end
 
-      threads.each(&:join)
       wait_until_stop_old_tasks(all_stopped_task_arns + all_running_task_arns)
 
       instance_ids = target_container_instances.map(&:ec2_instance_id)
