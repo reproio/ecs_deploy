@@ -166,7 +166,7 @@ module EcsDeploy
       running_tasks = task_arns.each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).flat_map do |arns|
         ecs_client.describe_tasks(cluster: @cluster, tasks: arns).tasks
       end.select do |task|
-        task.desired_status == "STOPPED" && task.last_status == "RUNNING"
+        task.desired_status == "RUNNING" || (task.desired_status == "STOPPED" && task.last_status == "RUNNING")
       end
 
       running_tasks.map(&:task_arn).each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).each do |chunk|
