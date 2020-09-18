@@ -148,6 +148,19 @@ module EcsDeploy
       end.map(&:task_arn)
     end
 
+    # list tasks whose desired_status is "RUNNING" or
+    # whoose desired_status is "STOPPED" but last_status is "RUNNING" on the ECS container
+    def list_running_task_arns(container_instance_arn)
+      running_tasks_arn = ecs_client.list_tasks(cluster: @cluster, container_instance: container_instance_arn).flat_map(&:task_arns)
+      stopped_tasks_arn = ecs_client.list_tasks(cluster: @cluster, container_instance: container_instance_arn, desired_status: "STOPPED").flat_map(&:task_arns)
+      stopped_running_task_arns = stopped_tasks_arn.each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).flat_map do |arns|
+        ecs_client.describe_tasks(cluster: @cluster, tasks: arns).tasks.select do |task|
+          task.desired_status == "STOPPED" && task.last_status == "RUNNING"
+        end
+      end.map(&:task_arn)
+      running_tasks_arn + stopped_running_task_arns
+    end
+
     def wait_until_stop_old_tasks(task_arns)
       @logger.info("All old tasks: #{task_arns.size}")
       running_tasks = task_arns.each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).flat_map do |arns|
@@ -163,12 +176,13 @@ module EcsDeploy
     end
 
     def stop_tasks(arn)
-      running_task_arns = ecs_client.list_tasks(cluster: @cluster, container_instance: arn).task_arns
+      running_task_arns = list_running_task_arns(arn)
       @logger.info("Running tasks: #{running_task_arns.size}")
       unless running_task_arns.empty?
-        running_tasks = ecs_client.describe_tasks(cluster: @cluster, tasks: running_task_arns).tasks
-        running_tasks.each do |task|
-          ecs_client.stop_task(cluster: @cluster, task: task.task_arn) if task.group.start_with?("family:")
+        running_task_arns.each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).each do |arns|
+          ecs_client.describe_tasks(cluster: @cluster, tasks: arns).each do |task|
+            ecs_client.stop_task(cluster: @cluster, task: task.task_arn) if task.group.start_with?("family:")
+          end
         end
       end
       @logger.info("Tasks running on #{arn.split('/').last} will be stopped")
