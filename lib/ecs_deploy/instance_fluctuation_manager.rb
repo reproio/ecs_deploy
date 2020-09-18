@@ -169,7 +169,7 @@ module EcsDeploy
         task.desired_status == "RUNNING" || (task.desired_status == "STOPPED" && task.last_status == "RUNNING")
       end
 
-      running_tasks.map(&:task_arn).each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).each do |chunk|
+      running_tasks.map(&:task_arn).each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).each do |arns|
         ecs_client.wait_until(:tasks_stopped, cluster: @cluster, tasks: arns)
       end
       @logger.info("All old tasks are stopped")
