@@ -66,15 +66,10 @@ module EcsDeploy
 
       target_container_instances = extract_target_container_instances(decrease_count, az_to_container_instances)
 
-      all_stopped_task_arns = list_stopped_running_task_arns
-      @logger.info("stopped tasks: #{all_stopped_task_arns.size}")
       @logger.info("running tasks: #{ecs_client.list_tasks(cluster: @cluster).task_arns.size}")
       all_running_task_arns = []
       target_container_instances.map(&:container_instance_arn).each_slice(MAX_UPDATABLE_ECS_CONTAINER_COUNT) do |arns|
         @logger.info(arns)
-        arns.each do |arn|
-          all_running_task_arns.concat(ecs_client.list_tasks(cluster: @cluster, container_instance: arn).task_arns)
-        end
         ecs_client.update_container_instances_state(
           cluster: @cluster,
           container_instances: arns,
@@ -85,7 +80,7 @@ module EcsDeploy
         end
       end
 
-      wait_until_stop_old_tasks(all_stopped_task_arns + all_running_task_arns)
+      wait_until_stop_old_tasks(all_running_task_arns)
 
       instance_ids = target_container_instances.map(&:ec2_instance_id)
       terminate_instances(instance_ids)
@@ -136,16 +131,6 @@ module EcsDeploy
       end
 
       target_container_instances
-    end
-
-    # list tasks whoose desired_status is "STOPPED" but last_status is "RUNNING" in the ECS cluster
-    def list_stopped_running_task_arns
-      stopped_task_arns = ecs_client.list_tasks(cluster: @cluster, desired_status: "STOPPED").flat_map(&:task_arns)
-      stopped_task_arns.each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).flat_map do |arns|
-        ecs_client.describe_tasks(cluster: @cluster, tasks: arns).tasks.select do |task|
-          task.desired_status == "STOPPED" && task.last_status == "RUNNING"
-        end
-      end.map(&:task_arn)
     end
 
     # list tasks whose desired_status is "RUNNING" or
