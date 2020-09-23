@@ -76,10 +76,11 @@ module EcsDeploy
           status: "DRAINING"
         )
         arns.each do |arn|
-          all_running_task_arns.concat(stop_tasks(arn))
+          all_running_task_arns.concat(list_running_task_arns)
         end
       end
 
+      stop_tasks(all_running_task_arns)
       wait_until_stop_old_tasks(all_running_task_arns)
 
       instance_ids = target_container_instances.map(&:ec2_instance_id)
@@ -160,8 +161,7 @@ module EcsDeploy
       @logger.info("All old tasks are stopped")
     end
 
-    def stop_tasks(arn)
-      running_task_arns = list_running_task_arns(arn)
+    def stop_tasks(running_tasks)
       @logger.info("Running tasks: #{running_task_arns.size}")
       unless running_task_arns.empty?
         running_task_arns.each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).each do |arns|
