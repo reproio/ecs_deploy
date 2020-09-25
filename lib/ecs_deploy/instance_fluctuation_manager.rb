@@ -76,7 +76,7 @@ module EcsDeploy
           status: "DRAINING"
         )
         arns.each do |arn|
-          all_running_task_arns.concat(list_running_task_arns)
+          all_running_task_arns.concat(list_running_task_arns(arn))
         end
       end
 
