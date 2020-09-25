@@ -164,8 +164,6 @@ module EcsDeploy
           end
         end
       end
-      @logger.info("Tasks running on #{arn.split('/').last} will be stopped")
-      running_task_arns
     end
 
     def terminate_instances(instance_ids)
