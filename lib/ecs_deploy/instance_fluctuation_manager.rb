@@ -8,6 +8,7 @@ module EcsDeploy
 
     MAX_UPDATABLE_ECS_CONTAINER_COUNT = 10
     MAX_DETACHEABLE_EC2_INSTACE_COUNT = 20
+    MAX_DESCRIBABLE_ECS_TASK_COUNT = 100
 
     def initialize(region:, cluster:, auto_scaling_group_name:, desired_capacity:, logger:)
       @region = region
@@ -18,7 +19,7 @@ module EcsDeploy
     end
 
     def increase
-      asg = as_client.describe_auto_scaling_groups(auto_scaling_group_names: [@auto_scaling_group_name]).auto_scaling_groups.first
+      asg = fetch_auto_scaling_group
 
       @logger.info("Increase desired capacity of #{@auto_scaling_group_name}: #{asg.desired_capacity} => #{asg.max_size}")
       as_client.update_auto_scaling_group(auto_scaling_group_name: @auto_scaling_group_name, desired_capacity: asg.max_size)
@@ -39,7 +40,7 @@ module EcsDeploy
     end
 
     def decrease
-      asg = as_client.describe_auto_scaling_groups(auto_scaling_group_names: [@auto_scaling_group_name]).auto_scaling_groups.first
+      asg = fetch_auto_scaling_group
 
       decrease_count = asg.desired_capacity - @desired_capacity
       if decrease_count <= 0
@@ -48,13 +49,12 @@ module EcsDeploy
       end
       @logger.info("Decrease desired capacity of #{@auto_scaling_group_name}: #{asg.desired_capacity} => #{@desired_capacity}")
 
-      container_instance_arns = ecs_client.list_container_instances(
-        cluster: @cluster
-      ).container_instance_arns
-      container_instances = ecs_client.describe_container_instances(
-        cluster: @cluster,
-        container_instances: container_instance_arns
-      ).container_instances
+      container_instances = ecs_client.list_container_instances(cluster: @cluster).flat_map do |resp|
+        ecs_client.describe_container_instances(
+          cluster: @cluster,
+          container_instances: resp.container_instance_arns
+        ).container_instances
+      end
 
       az_to_container_instances = container_instances.sort_by {|ci| - ci.running_tasks_count }.group_by do |ci|
         ci.attributes.find {|attribute| attribute.name == "ecs.availability-zone" }.value
@@ -66,24 +66,22 @@ module EcsDeploy
 
       target_container_instances = extract_target_container_instances(decrease_count, az_to_container_instances)
 
-      threads = []
+      @logger.info("running tasks: #{ecs_client.list_tasks(cluster: @cluster).task_arns.size}")
       all_running_task_arns = []
       target_container_instances.map(&:container_instance_arn).each_slice(MAX_UPDATABLE_ECS_CONTAINER_COUNT) do |arns|
+        @logger.info(arns)
         ecs_client.update_container_instances_state(
           cluster: @cluster,
           container_instances: arns,
           status: "DRAINING"
         )
         arns.each do |arn|
-          threads << Thread.new(arn) do |a|
-            all_running_task_arns.concat(stop_tasks(a))
-          end
+          all_running_task_arns.concat(list_running_task_arns(arn))
         end
       end
 
-      threads.each(&:join)
-      ecs_client.wait_until(:tasks_stopped, cluster: @cluster, tasks: all_running_task_arns) unless all_running_task_arns.empty?
-      @logger.info("All running tasks are stopped")
+      stop_tasks_not_belonging_service(all_running_task_arns)
+      wait_until_tasks_stopped(all_running_task_arns)
 
       instance_ids = target_container_instances.map(&:ec2_instance_id)
       terminate_instances(instance_ids)
@@ -115,6 +113,10 @@ module EcsDeploy
       @ecs_client ||= Aws::ECS::Client.new(aws_params)
     end
 
+    def fetch_auto_scaling_group
+      as_client.describe_auto_scaling_groups(auto_scaling_group_names: [@auto_scaling_group_name]).auto_scaling_groups.first
+    end
+
     # Extract container instances to terminate considering AZ balance
     def extract_target_container_instances(decrease_count, az_to_container_instances)
       target_container_instances = []
@@ -132,16 +134,36 @@ module EcsDeploy
       target_container_instances
     end
 
-    def stop_tasks(arn)
-      running_task_arns = ecs_client.list_tasks(cluster: @cluster, container_instance: arn).task_arns
+    # list tasks whose desired_status is "RUNNING" or
+    # whoose desired_status is "STOPPED" but last_status is "RUNNING" on the ECS container
+    def list_running_task_arns(container_instance_arn)
+      running_tasks_arn = ecs_client.list_tasks(cluster: @cluster, container_instance: container_instance_arn).flat_map(&:task_arns)
+      stopped_tasks_arn = ecs_client.list_tasks(cluster: @cluster, container_instance: container_instance_arn, desired_status: "STOPPED").flat_map(&:task_arns)
+      stopped_running_task_arns = stopped_tasks_arn.each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).flat_map do |arns|
+        ecs_client.describe_tasks(cluster: @cluster, tasks: arns).tasks.select do |task|
+          task.desired_status == "STOPPED" && task.last_status == "RUNNING"
+        end
+      end.map(&:task_arn)
+      running_tasks_arn + stopped_running_task_arns
+    end
+
+    def wait_until_tasks_stopped(task_arns)
+      @logger.info("All old tasks: #{task_arns.size}")
+      task_arns.each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).each do |arns|
+        ecs_client.wait_until(:tasks_stopped, cluster: @cluster, tasks: arns)
+      end
+      @logger.info("All old tasks are stopped")
+    end
+
+    def stop_tasks_not_belonging_service(running_task_arns)
+      @logger.info("Running tasks: #{running_task_arns.size}")
       unless running_task_arns.empty?
-        running_tasks = ecs_client.describe_tasks(cluster: @cluster, tasks: running_task_arns).tasks
-        running_tasks.each do |task|
-          ecs_client.stop_task(cluster: @cluster, task: task.task_arn) if task.group.start_with?("family:")
+        running_task_arns.each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).each do |arns|
+          ecs_client.describe_tasks(cluster: @cluster, tasks: arns).tasks.each do |task|
+            ecs_client.stop_task(cluster: @cluster, task: task.task_arn) if task.group.start_with?("family:")
+          end
         end
       end
-      @logger.info("Tasks running on #{arn.split('/').last} will be stopped")
-      running_task_arns
     end
 
     def terminate_instances(instance_ids)
