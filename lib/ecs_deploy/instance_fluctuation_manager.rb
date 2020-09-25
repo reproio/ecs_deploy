@@ -81,7 +81,7 @@ module EcsDeploy
       end
 
       stop_tasks_not_belonging_service(all_running_task_arns)
-      wait_until_stop_old_tasks(all_running_task_arns)
+      wait_until_tasks_stopped(all_running_task_arns)
 
       instance_ids = target_container_instances.map(&:ec2_instance_id)
       terminate_instances(instance_ids)
@@ -147,7 +147,7 @@ module EcsDeploy
       running_tasks_arn + stopped_running_task_arns
     end
 
-    def wait_until_stop_old_tasks(task_arns)
+    def wait_until_tasks_stopped(task_arns)
       @logger.info("All old tasks: #{task_arns.size}")
       task_arns.each_slice(MAX_DESCRIBABLE_ECS_TASK_COUNT).each do |arns|
         ecs_client.wait_until(:tasks_stopped, cluster: @cluster, tasks: arns)
