@@ -113,7 +113,7 @@ namespace :ecs do
           service_options[:placement_constraints] = service[:placement_constraints] if service[:placement_constraints]
           service_options[:placement_strategy] = service[:placement_strategy] if service[:placement_strategy]
           service_options[:scheduling_strategy] = service[:scheduling_strategy] if service[:scheduling_strategy]
-          s = EcsDeploy::Service.new(service_options)
+          s = EcsDeploy::Service.new(**service_options)
           s.deploy
           s
         end
@@ -178,7 +178,7 @@ namespace :ecs do
           service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
           service_options[:placement_constraints] = service[:placement_constraints] if service[:placement_constraints]
           service_options[:placement_strategy] = service[:placement_strategy] if service[:placement_strategy]
-          s = EcsDeploy::Service.new(service_options)
+          s = EcsDeploy::Service.new(**service_options)
           s.deploy
           EcsDeploy::TaskDefinition.deregister(current_task_definition_arn, region: r)
           s
