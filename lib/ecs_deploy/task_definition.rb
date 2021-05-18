@@ -1,11 +1,11 @@
 module EcsDeploy
-  RETRY_BACKOFF = lambda do |c|
-    sleep(1)
-  end
-
-  RETRY_LIMIT = 10
-
   class TaskDefinition
+    RETRY_BACKOFF = lambda do |c|
+      sleep(1)
+    end
+
+    RETRY_LIMIT = 10
+
     def self.deregister(arn, region: nil)
       region ||= EcsDeploy.config.default_region
       param = {retry_backoff: RETRY_BACKOFF, retry_limit: RETRY_LIMIT}
