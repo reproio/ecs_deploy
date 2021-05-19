@@ -1,8 +1,15 @@
 module EcsDeploy
   class TaskDefinition
+    RETRY_BACKOFF = lambda do |c|
+      sleep(1)
+    end
+
+    RETRY_LIMIT = 10
+
     def self.deregister(arn, region: nil)
       region ||= EcsDeploy.config.default_region
-      client = region ? Aws::ECS::Client.new(region: region) : Aws::ECS::Client.new
+      param = {retry_backoff: RETRY_BACKOFF, retry_limit: RETRY_LIMIT}
+      client = region ? Aws::ECS::Client.new(param.merge(region: region)) : Aws::ECS::Client.new(param)
       client.deregister_task_definition({
         task_definition: arn,
       })
@@ -39,8 +46,8 @@ module EcsDeploy
       @cpu = cpu&.to_s
       @memory = memory&.to_s
       @tags = tags
-
-      @client = region ? Aws::ECS::Client.new(region: region) : Aws::ECS::Client.new
+      param = {retry_backoff: RETRY_BACKOFF, retry_limit: RETRY_LIMIT}
+      @client = region ? Aws::ECS::Client.new(param.merge(region: region)) : Aws::ECS::Client.new(param)
       @region = @client.config.region
     end
 
