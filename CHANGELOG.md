@@ -1,5 +1,20 @@
 # v1.0
 
+## Release v1.0.1 - 2021/05/19
+
+### Enhancement
+
+* retry register_task_definition by AWS SDK feature
+  https://github.com/reproio/ecs_deploy/pull/67
+* Support Ruby 3.0
+  https://github.com/reproio/ecs_deploy/pull/66
+* Wait until stop old tasks
+  https://github.com/reproio/ecs_deploy/pull/65
+* Add prioritized_over_upscale_triggers option to triggers
+  https://github.com/reproio/ecs_deploy/pull/62
+* Display only unstable services in EcsDeploy::Service#wait_all_running
+  https://github.com/reproio/ecs_deploy/pull/61
+
 ## Release v1.0.0 - 2019/12/24
 
 ### New feature
