@@ -108,6 +108,7 @@ namespace :ecs do
             enable_ecs_managed_tags: service[:enable_ecs_managed_tags],
             tags: service[:tags],
             propagate_tags: service[:propagate_tags],
+            enable_execute_command: service[:enable_execute_command],
           }
           service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
           service_options[:placement_constraints] = service[:placement_constraints] if service[:placement_constraints]
