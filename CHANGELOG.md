@@ -1,5 +1,12 @@
 # v1.0
 
+## Release v1.0.2 - 2021/05/26
+
+### Enhancement
+
+* add option enable_execute_command to support ECS Exec
+  https://github.com/reproio/ecs_deploy/pull/69
+
 ## Release v1.0.1 - 2021/05/19
 
 ### Enhancement
