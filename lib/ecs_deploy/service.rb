@@ -23,7 +23,8 @@ module EcsDeploy
       tags: nil,
       propagate_tags: nil,
       region: nil,
-      delete: false
+      delete: false,
+      enable_execute_command: false
     )
       @cluster = cluster
       @service_name = service_name
@@ -41,6 +42,7 @@ module EcsDeploy
       @enable_ecs_managed_tags = enable_ecs_managed_tags
       @tags = tags
       @propagate_tags = propagate_tags
+      @enable_execute_command = enable_execute_command
 
       @response = nil
 
@@ -64,6 +66,7 @@ module EcsDeploy
         deployment_configuration: @deployment_configuration,
         network_configuration: @network_configuration,
         health_check_grace_period_seconds: @health_check_grace_period_seconds,
+        enable_execute_command: @enable_execute_command,
       }
       if res.services.select{ |s| s.status == 'ACTIVE' }.empty?
         return if @delete
