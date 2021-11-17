@@ -56,6 +56,9 @@ module EcsDeploy
         ).container_instances
       end
 
+      # The status of ECS instances sometimes seems to remain 'DEREGISTERING' for a few minutes after they are terminated.
+      container_instances.reject! { |ci| ci.status == 'DEREGISTERING' }
+
       az_to_container_instances = container_instances.sort_by {|ci| - ci.running_tasks_count }.group_by do |ci|
         ci.attributes.find {|attribute| attribute.name == "ecs.availability-zone" }.value
       end
