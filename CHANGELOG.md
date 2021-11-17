@@ -1,5 +1,16 @@
 # v1.0
 
+## Release v1.0.3 - 2021/11/17
+
+### Bug fixes
+* Fix bug that `InstanceFluctuationManager#decrement` tries to detach instances whose status is 'DEREGISTERING'
+  https://github.com/reproio/ecs_deploy/pull/72
+
+### Enhancement
+* Add a cluster name to deployment logs
+  https://github.com/reproio/ecs_deploy/pull/71
+
+
 ## Release v1.0.2 - 2021/05/26
 
 ### Enhancement
