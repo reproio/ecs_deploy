@@ -16,6 +16,7 @@ module EcsDeploy
       launch_type: nil,
       placement_constraints: [],
       placement_strategy: [],
+      capacity_provider_strategy: nil,
       network_configuration: nil,
       health_check_grace_period_seconds: nil,
       scheduling_strategy: 'REPLICA',
@@ -35,6 +36,7 @@ module EcsDeploy
       @launch_type = launch_type
       @placement_constraints = placement_constraints
       @placement_strategy = placement_strategy
+      @capacity_provider_strategy = capacity_provider_strategy
       @network_configuration = network_configuration
       @health_check_grace_period_seconds = health_check_grace_period_seconds
       @scheduling_strategy = scheduling_strategy
@@ -77,6 +79,7 @@ module EcsDeploy
           launch_type: @launch_type,
           placement_constraints: @placement_constraints,
           placement_strategy: @placement_strategy,
+          capacity_provider_strategy: @capacity_provider_strategy,
           enable_ecs_managed_tags: @enable_ecs_managed_tags,
           tags: @tags,
           propagate_tags: @propagate_tags,
