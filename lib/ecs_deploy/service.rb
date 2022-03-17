@@ -68,8 +68,25 @@ module EcsDeploy
         deployment_configuration: @deployment_configuration,
         network_configuration: @network_configuration,
         health_check_grace_period_seconds: @health_check_grace_period_seconds,
+        capacity_provider_strategy: @capacity_provider_strategy,
         enable_execute_command: @enable_execute_command,
+        enable_ecs_managed_tags: @enable_ecs_managed_tags,
+        placement_constraints: @placement_constraints,
+        placement_strategy: @placement_strategy,
       }
+
+      if @load_balancers && EcsDeploy.config.ecs_service_role
+        service_options.merge!({
+          role: EcsDeploy.config.ecs_service_role,
+        })
+      end
+
+      if @load_balancers
+        service_options.merge!({
+          load_balancers: @load_balancers,
+        })
+      end
+
       if res.services.select{ |s| s.status == 'ACTIVE' }.empty?
         return if @delete
 
@@ -77,25 +94,9 @@ module EcsDeploy
           service_name: @service_name,
           desired_count: @desired_count.to_i,
           launch_type: @launch_type,
-          placement_constraints: @placement_constraints,
-          placement_strategy: @placement_strategy,
-          capacity_provider_strategy: @capacity_provider_strategy,
-          enable_ecs_managed_tags: @enable_ecs_managed_tags,
           tags: @tags,
           propagate_tags: @propagate_tags,
         })
-
-        if @load_balancers && EcsDeploy.config.ecs_service_role
-          service_options.merge!({
-            role: EcsDeploy.config.ecs_service_role,
-          })
-        end
-
-        if @load_balancers
-          service_options.merge!({
-            load_balancers: @load_balancers,
-          })
-        end
 
         if @scheduling_strategy == 'DAEMON'
           service_options[:scheduling_strategy] = @scheduling_strategy
