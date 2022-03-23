@@ -109,11 +109,25 @@ module EcsDeploy
 
         service_options.merge!({service: @service_name})
         service_options.merge!({desired_count: @desired_count}) if @desired_count
-        service_options.merge!({force_new_deployment: true}) if @capacity_provider_strategy
+
+        current_service = res.services[0]
+        service_options.merge!({force_new_deployment: true}) if need_force_new_deployment?(current_service)
+
         update_tags(@service_name, @tags)
         @response = @client.update_service(service_options)
         EcsDeploy.logger.info "update service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
       end
+    end
+
+    private def need_force_new_deployment?(service)
+      @capacity_provider_strategy &&
+        @capacity_provider_strategy.all? do |strategy|
+          service.capacity_provider_strategy.find do |current_strategy|
+            strategy[:capacity_provider] == current_strategy.capacity_provider &&
+              strategy[:weight] == current_strategy.weight &&
+              strategy[:base] == current_strategy.base
+          end
+        end
     end
 
     def delete_service
