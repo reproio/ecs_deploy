@@ -120,14 +120,19 @@ module EcsDeploy
     end
 
     private def need_force_new_deployment?(service)
-      @capacity_provider_strategy &&
-        @capacity_provider_strategy.all? do |strategy|
-          service.capacity_provider_strategy.find do |current_strategy|
-            strategy[:capacity_provider] == current_strategy.capacity_provider &&
-              strategy[:weight] == current_strategy.weight &&
-              strategy[:base] == current_strategy.base
-          end
+      return false unless @capacity_provider_strategy
+
+      return true if @capacity_provider_strategy.size != service.capacity_provider_strategy.size
+
+      match_array = @capacity_provider_strategy.all? do |strategy|
+        service.capacity_provider_strategy.find do |current_strategy|
+          strategy[:capacity_provider] == current_strategy.capacity_provider &&
+            strategy[:weight] == current_strategy.weight &&
+            strategy[:base] == current_strategy.base
         end
+      end
+
+      !match_array
     end
 
     def delete_service
