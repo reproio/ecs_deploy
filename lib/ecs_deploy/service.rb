@@ -16,6 +16,7 @@ module EcsDeploy
       launch_type: nil,
       placement_constraints: [],
       placement_strategy: [],
+      capacity_provider_strategy: nil,
       network_configuration: nil,
       health_check_grace_period_seconds: nil,
       scheduling_strategy: 'REPLICA',
@@ -35,6 +36,7 @@ module EcsDeploy
       @launch_type = launch_type
       @placement_constraints = placement_constraints
       @placement_strategy = placement_strategy
+      @capacity_provider_strategy = capacity_provider_strategy
       @network_configuration = network_configuration
       @health_check_grace_period_seconds = health_check_grace_period_seconds
       @scheduling_strategy = scheduling_strategy
@@ -66,8 +68,25 @@ module EcsDeploy
         deployment_configuration: @deployment_configuration,
         network_configuration: @network_configuration,
         health_check_grace_period_seconds: @health_check_grace_period_seconds,
+        capacity_provider_strategy: @capacity_provider_strategy,
         enable_execute_command: @enable_execute_command,
+        enable_ecs_managed_tags: @enable_ecs_managed_tags,
+        placement_constraints: @placement_constraints,
+        placement_strategy: @placement_strategy,
       }
+
+      if @load_balancers && EcsDeploy.config.ecs_service_role
+        service_options.merge!({
+          role: EcsDeploy.config.ecs_service_role,
+        })
+      end
+
+      if @load_balancers
+        service_options.merge!({
+          load_balancers: @load_balancers,
+        })
+      end
+
       if res.services.select{ |s| s.status == 'ACTIVE' }.empty?
         return if @delete
 
@@ -75,24 +94,9 @@ module EcsDeploy
           service_name: @service_name,
           desired_count: @desired_count.to_i,
           launch_type: @launch_type,
-          placement_constraints: @placement_constraints,
-          placement_strategy: @placement_strategy,
-          enable_ecs_managed_tags: @enable_ecs_managed_tags,
           tags: @tags,
           propagate_tags: @propagate_tags,
         })
-
-        if @load_balancers && EcsDeploy.config.ecs_service_role
-          service_options.merge!({
-            role: EcsDeploy.config.ecs_service_role,
-          })
-        end
-
-        if @load_balancers
-          service_options.merge!({
-            load_balancers: @load_balancers,
-          })
-        end
 
         if @scheduling_strategy == 'DAEMON'
           service_options[:scheduling_strategy] = @scheduling_strategy
@@ -105,10 +109,30 @@ module EcsDeploy
 
         service_options.merge!({service: @service_name})
         service_options.merge!({desired_count: @desired_count}) if @desired_count
+
+        current_service = res.services[0]
+        service_options.merge!({force_new_deployment: true}) if need_force_new_deployment?(current_service)
+
         update_tags(@service_name, @tags)
         @response = @client.update_service(service_options)
         EcsDeploy.logger.info "update service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
       end
+    end
+
+    private def need_force_new_deployment?(service)
+      return false unless @capacity_provider_strategy
+
+      return true if @capacity_provider_strategy.size != service.capacity_provider_strategy.size
+
+      match_array = @capacity_provider_strategy.all? do |strategy|
+        service.capacity_provider_strategy.find do |current_strategy|
+          strategy[:capacity_provider] == current_strategy.capacity_provider &&
+            strategy[:weight] == current_strategy.weight &&
+            strategy[:base] == current_strategy.base
+        end
+      end
+
+      !match_array
     end
 
     def delete_service
