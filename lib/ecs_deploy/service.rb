@@ -121,6 +121,7 @@ module EcsDeploy
 
     private def need_force_new_deployment?(service)
       return false unless @capacity_provider_strategy
+      return true unless service.capacity_provider_strategy
 
       return true if @capacity_provider_strategy.size != service.capacity_provider_strategy.size
 
