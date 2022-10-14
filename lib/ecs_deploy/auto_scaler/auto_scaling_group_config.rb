@@ -150,7 +150,7 @@ module EcsDeploy
           # The lifecycle state of terminated instances becomes "Terminating", "Terminating:Wait", or "Terminating:Proceed",
           # and we can't detach instances in such a state.
           if i.lifecycle_state.start_with?("Terminating")
-            AutoScaler.error_logger.warn("#{log_prefix} The lifesycle state of #{i.instance_id} is \"#{i.lifecycle_state}\", so ignore it")
+            AutoScaler.error_logger.warn("#{log_prefix} The lifecycle state of #{i.instance_id} is \"#{i.lifecycle_state}\", so ignore it")
             next true
           end
         end.map(&:instance_id)
