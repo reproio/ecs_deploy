@@ -147,9 +147,10 @@ module EcsDeploy
         orphans = instances(reload: true).reject do |i|
           next true if container_instance_ids.include?(i.instance_id)
 
-          # The lifecycle state of terminated instances becomes "Terminating", "Terminating:Wait", or "Terminating:Proceed",
-          # and we can't detach instances in such a state.
-          if i.lifecycle_state.start_with?("Terminating")
+          # We can't detach instances in following states.
+          # The lifecycle state of terminated instances becomes "Terminating", "Terminating:Wait", or "Terminating:Proceed".
+          # The lifecycle state of launching instances becomes "Pending", "Pending:Wait", or "Pending:Proceed".
+          if i.lifecycle_state.start_with?("Terminating") || i.lifecycle_state.start_with?("Pending")
             AutoScaler.error_logger.warn("#{log_prefix} The lifecycle state of #{i.instance_id} is \"#{i.lifecycle_state}\", so ignore it")
             next true
           end
