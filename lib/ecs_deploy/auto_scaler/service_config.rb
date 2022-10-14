@@ -135,6 +135,9 @@ module EcsDeploy
           now = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
           @reach_max_at ||= now
           @logger.info "#{log_prefix} Service waits cooldown elapsed #{(now - @reach_max_at).to_i}sec"
+          if next_desired_count > max_task_count[current_level] && current_level == max_task_count.size - 1
+            @logger.warn "#{log_prefix} Desired count has reached the maximum value and couldn't be increased"
+          end
         elsif current_level == next_level && next_desired_count < max_task_count[current_level]
           level = current_level
           @reach_max_at = nil
