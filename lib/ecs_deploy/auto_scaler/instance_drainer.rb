@@ -78,6 +78,11 @@ module EcsDeploy
       def set_instance_state_to_draining(config_to_instance_ids, region)
         cl = ecs_client(region)
         config_to_instance_ids.each do |config, instance_ids|
+          if config.disable_draining == true || config.disable_draining == "true"
+            @logger.info "Skip draining instances: region: #{region}, cluster: #{config.cluster}, instance_ids: #{instance_ids.inspect}"
+            next
+          end
+
           arns = cl.list_container_instances(
             cluster: config.cluster,
             filter: "ec2InstanceId in [#{instance_ids.join(",")}]",

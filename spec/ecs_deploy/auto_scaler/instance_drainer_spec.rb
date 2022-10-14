@@ -8,7 +8,7 @@ RSpec.describe EcsDeploy::AutoScaler::InstanceDrainer do
     subject(:drainer) do
       described_class.new(
         auto_scaling_group_configs: [asg_config],
-        spot_fleet_request_configs: [double(id: "sfr_id", region: "ap-northeast-1", cluster: nil)],
+        spot_fleet_request_configs: [double(id: "sfr_id", region: "ap-northeast-1", cluster: nil, disable_draining: disable_draining)],
         logger: Logger.new(nil),
       )
     end
@@ -18,6 +18,7 @@ RSpec.describe EcsDeploy::AutoScaler::InstanceDrainer do
         name: "asg_name",
         region: "ap-northeast-1",
         cluster: "ecs-cluster",
+        disable_draining: disable_draining,
       )
     end
 
@@ -73,21 +74,41 @@ RSpec.describe EcsDeploy::AutoScaler::InstanceDrainer do
       })
     end
 
-    it "updates the state of interrupted instances to 'DRAINING'" do
-      expect(asg_config).to receive(:detach_instances).with(instance_ids: ["i-222222"], should_decrement_desired_capacity: false)
+    [nil, false, "false"].each do |disable_draining|
+      context "with disable_draining #{disable_draining.inspect}" do
+        let(:disable_draining) { disable_draining }
 
-      drainer.poll_spot_instance_interruption_warnings("https://sqs.ap-northeast-1.amazonaws.com/account_id/queue_name")
+        it "updates the state of interrupted instances to 'DRAINING'" do
+          expect(asg_config).to receive(:detach_instances).with(instance_ids: ["i-222222"], should_decrement_desired_capacity: false)
 
-      expect(ecs_client.api_requests).to include({
-        operation_name: :update_container_instances_state,
-        params: { cluster: nil, container_instances: ["arn:i-000000"], status: "DRAINING" },
-        context: a_kind_of(Seahorse::Client::RequestContext),
-      })
-      expect(ecs_client.api_requests).to include({
-        operation_name: :update_container_instances_state,
-        params: { cluster: "ecs-cluster", container_instances: ["arn:i-222222"], status: "DRAINING" },
-        context: a_kind_of(Seahorse::Client::RequestContext),
-      })
+          drainer.poll_spot_instance_interruption_warnings("https://sqs.ap-northeast-1.amazonaws.com/account_id/queue_name")
+
+          expect(ecs_client.api_requests).to include({
+            operation_name: :update_container_instances_state,
+            params: { cluster: nil, container_instances: ["arn:i-000000"], status: "DRAINING" },
+            context: a_kind_of(Seahorse::Client::RequestContext),
+          })
+          expect(ecs_client.api_requests).to include({
+            operation_name: :update_container_instances_state,
+            params: { cluster: "ecs-cluster", container_instances: ["arn:i-222222"], status: "DRAINING" },
+            context: a_kind_of(Seahorse::Client::RequestContext),
+          })
+        end
+      end
+    end
+
+    [true, "true"].each do |disable_draining|
+      context "with disable_draining #{disable_draining.inspect}" do
+        let(:disable_draining) { disable_draining }
+
+        it "updates the state of interrupted instances to 'DRAINING'" do
+          expect(asg_config).to receive(:detach_instances).with(instance_ids: ["i-222222"], should_decrement_desired_capacity: false)
+
+          drainer.poll_spot_instance_interruption_warnings("https://sqs.ap-northeast-1.amazonaws.com/account_id/queue_name")
+
+          expect(ecs_client.api_requests).to eq []
+        end
+      end
     end
   end
 end
