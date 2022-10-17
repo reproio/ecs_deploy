@@ -7,7 +7,7 @@ require "ecs_deploy/auto_scaler/cluster_resource_manager"
 
 module EcsDeploy
   module AutoScaler
-    AutoScalingGroupConfig = Struct.new(:name, :region, :cluster, :buffer, :service_configs) do
+    AutoScalingGroupConfig = Struct.new(:name, :region, :cluster, :buffer, :service_configs, :disable_draining) do
       include ConfigBase
 
       MAX_DETACHABLE_INSTANCE_COUNT = 20

@@ -215,6 +215,7 @@ auto_scaling_groups:
     # autoscaler will set the capacity to (buffer + desired_tasks * required_capacity).
     # Adjust this value if it takes much time to prepare ECS instances and launch new tasks.
     buffer: 1
+    disable_draining: false # cf. spot_instance_intrp_warns_queue_urls
     services:
       - name: repro-api-production
         step: 1
@@ -242,6 +243,7 @@ spot_fleet_requests:
     region: ap-northeast-1
     cluster: ecs-cluster-for-worker
     buffer: 1
+    disable_draining: false # cf. spot_instance_intrp_warns_queue_urls
     services:
       - name: repro-worker-production
         step: 1
@@ -261,11 +263,15 @@ spot_fleet_requests:
             state: ALARM
             prioritized_over_upscale_triggers: true
 
-# If you specify `spot_instance_intrp_warns_queue_urls` as SQS queue for spot instance interruption warnings,
-# autoscaler will polls them and set the state of instances to be intrrupted to "DRAINING".
-# autoscaler will also waits for the capacity of active instances in the cluster being decreased
-# when the capacity of spot fleet request is decreased,
-# so you should specify URLs or set the state of the instances to "DRAINING" manually.
+# When you use spot instances, instances that receive interruption warnings should be drained.
+# If you set URLs of SQS queues for spot instance interruption warnings to `spot_instance_intrp_warns_queue_urls`,
+# autoscaler drains instances to interrupt and detaches the instances from the auto scaling groups with
+# should_decrement_desired_capacity false.
+# If you set ECS_ENABLE_SPOT_INSTANCE_DRAINING to true, we recommend that you opt out of the draining feature
+# by setting disable_draining to true in the configurations of auto scaling groups and spot fleet requests.
+# Otherwise, instances don't seem to be drained on rare occasions.
+# Even if you opt out of the feature, you still have the advantage of setting `spot_instance_intrp_warns_queue_urls`
+# because instances to interrupt are replaced with new instances as soon as possible.
 spot_instance_intrp_warns_queue_urls:
   - https://sqs.ap-northeast-1.amazonaws.com/<account-id>/spot-instance-intrp-warns
 ```

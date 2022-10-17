@@ -8,7 +8,7 @@ require "ecs_deploy/auto_scaler/cluster_resource_manager"
 
 module EcsDeploy
   module AutoScaler
-    SpotFleetRequestConfig = Struct.new(:id, :region, :cluster, :buffer, :service_configs) do
+    SpotFleetRequestConfig = Struct.new(:id, :region, :cluster, :buffer, :service_configs, :disable_draining) do
       include ConfigBase
 
       def initialize(attributes = {}, logger)
