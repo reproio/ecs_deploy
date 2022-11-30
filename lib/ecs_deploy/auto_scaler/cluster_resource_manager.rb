@@ -89,22 +89,20 @@ module EcsDeploy
             end
             @logger&.info "#{log_prefix} capacity is updated to #{@capacity}"
           end
+        rescue Timeout::Error => e
+          msg = "#{log_prefix} `#{__method__}': #{e} (#{e.class})"
+          if @capacity_based_on == "vCPUs"
+            # Timeout::Error sometimes occur.
+            # For example, @capacity won't be new_desired_capacity if new_desired_capacity is odd and all instances have 2 vCPUs
+            AutoScaler.error_logger.warn(msg)
+          else
+            AutoScaler.error_logger.error(msg)
+          end
         end
 
         if wait_until_capacity_updated
           @logger&.info "#{log_prefix} Wait for the capacity of active instances to become #{new_desired_capacity} from #{old_desired_capacity}"
-          begin
-            th.join
-          rescue Timeout::Error => e
-            msg = "#{log_prefix} `#{__method__}': #{e} (#{e.class})"
-            if @capacity_based_on == "vCPUs"
-              # Timeout::Error sometimes occur.
-              # For example, @capacity won't be new_desired_capacity if new_desired_capacity is odd and all instances have 2 vCPUs
-              AutoScaler.error_logger.warn(msg)
-            else
-              AutoScaler.error_logger.error(msg)
-            end
-          end
+          th.join
         end
       end
 
