@@ -77,7 +77,9 @@ module EcsDeploy
         th = Thread.new do
           @logger&.info "#{log_prefix} Start updating capacity: #{old_desired_capacity} -> #{new_desired_capacity}"
           Timeout.timeout(180) do
-            until @capacity == new_desired_capacity || (new_desired_capacity >= old_desired_capacity && @capacity > new_desired_capacity)
+            until @capacity == new_desired_capacity ||
+                (new_desired_capacity >= old_desired_capacity && @capacity > new_desired_capacity) ||
+                (new_desired_capacity < old_desired_capacity && @capacity < new_desired_capacity)
               @mutex.synchronize do
                 @capacity = calculate_active_instance_capacity
                 @resource.broadcast
@@ -93,7 +95,10 @@ module EcsDeploy
           msg = "#{log_prefix} `#{__method__}': #{e} (#{e.class})"
           if @capacity_based_on == "vCPUs"
             # Timeout::Error sometimes occur.
-            # For example, @capacity won't be new_desired_capacity if new_desired_capacity is odd and all instances have 2 vCPUs
+            # For example, the following case never meats the condition of until
+            #   * old_desired_capaacity is 102
+            #   * new_desired_capaacity is 101
+            #   * all instances have 2 vCPUs
             AutoScaler.error_logger.warn(msg)
           else
             AutoScaler.error_logger.error(msg)
