@@ -79,12 +79,10 @@ module EcsDeploy
           Timeout.timeout(180) do
             until @capacity == new_desired_capacity || (new_desired_capacity >= old_desired_capacity && @capacity > new_desired_capacity)
               @mutex.synchronize do
-                begin
-                  @capacity = calculate_active_instance_capacity
-                  @resource.broadcast
-                rescue => e
-                  AutoScaler.error_logger.warn("#{log_prefix} `#{__method__}': #{e} (#{e.class})")
-                end
+                @capacity = calculate_active_instance_capacity
+                @resource.broadcast
+              rescue => e
+                AutoScaler.error_logger.warn("#{log_prefix} `#{__method__}': #{e} (#{e.class})")
               end
 
               sleep interval
