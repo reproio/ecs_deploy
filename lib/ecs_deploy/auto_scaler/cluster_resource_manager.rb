@@ -74,11 +74,13 @@ module EcsDeploy
       end
 
       def trigger_capacity_update(old_desired_capacity, new_desired_capacity, interval: 5, wait_until_capacity_updated: false)
+        return if new_desired_capacity == old_desired_capacity
+
         th = Thread.new do
           @logger&.info "#{log_prefix} Start updating capacity: #{old_desired_capacity} -> #{new_desired_capacity}"
           Timeout.timeout(180) do
             until @capacity == new_desired_capacity ||
-                (new_desired_capacity >= old_desired_capacity && @capacity > new_desired_capacity) ||
+                (new_desired_capacity > old_desired_capacity && @capacity > new_desired_capacity) ||
                 (new_desired_capacity < old_desired_capacity && @capacity < new_desired_capacity)
               @mutex.synchronize do
                 @capacity = calculate_active_instance_capacity
