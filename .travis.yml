@@ -1,5 +1,0 @@
-language: ruby
-rvm:
-  - ruby-2.4.9
-  - ruby-2.5.7
-  - ruby-2.6.5
