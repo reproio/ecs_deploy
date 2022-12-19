@@ -191,7 +191,7 @@ module EcsDeploy
                 if s.deployments.size == 1 && s.running_count == s.desired_count
                   chunked_service_names.delete(s.service_name)
                 end
-                service = ss.detect {|sc| sc.cluster == File.basename(s.cluster_arn) && sc.service_name == s.service_name }
+                service = ss.detect {|sc| sc.service_name == s.service_name }
                 service.log_events(s)
               end
               break if chunked_service_names.empty?
