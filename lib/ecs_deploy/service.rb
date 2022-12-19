@@ -182,7 +182,7 @@ module EcsDeploy
                 if s.deployments.size == 1 && s.running_count == s.desired_count
                   chunked_service_names.delete(s.service_name)
                 else
-                  service = ss.detect { _1.cluster == File.basename(s.cluster_arn) && _1.service_name == s.service_name }
+                  service = ss.detect {|sc| sc.cluster == File.basename(s.cluster_arn) && sc.service_name == s.service_name }
                   s.events.sort_by(&:created_at).each do |e|
                     next if e.created_at <= service.deploy_started_at
                     next if last_events[s.service_arn] && e.created_at <= last_events[s.service_arn].created_at
