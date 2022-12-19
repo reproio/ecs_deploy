@@ -168,12 +168,21 @@ module EcsDeploy
       end
     end
 
+    def log_events(ecs_service)
+      ecs_service.events.sort_by(&:created_at).each do |e|
+        next if e.created_at <= deploy_started_at
+        next if @last_event && e.created_at <= @last_event.created_at
+
+        EcsDeploy.logger.info e.message
+        @last_event = e
+      end
+    end
+
     def self.wait_all_running(services)
       services.group_by { |s| [s.cluster, s.region] }.flat_map do |(cl, region), ss|
         client = Aws::ECS::Client.new(region: region)
         ss.reject(&:delete).map(&:service_name).each_slice(MAX_DESCRIBE_SERVICES).map do |chunked_service_names|
           Thread.new do
-            last_events = {}
             EcsDeploy.config.ecs_wait_until_services_stable_max_attempts.times do
               EcsDeploy.logger.info "wait service stable [#{chunked_service_names.join(", ")}] [#{cl}]"
               resp = client.describe_services(cluster: cl, services: chunked_service_names)
@@ -181,16 +190,9 @@ module EcsDeploy
                 # cf. https://github.com/aws/aws-sdk-ruby/blob/master/gems/aws-sdk-ecs/lib/aws-sdk-ecs/waiters.rb#L91-L96
                 if s.deployments.size == 1 && s.running_count == s.desired_count
                   chunked_service_names.delete(s.service_name)
-                else
-                  service = ss.detect {|sc| sc.cluster == File.basename(s.cluster_arn) && sc.service_name == s.service_name }
-                  s.events.sort_by(&:created_at).each do |e|
-                    next if e.created_at <= service.deploy_started_at
-                    next if last_events[s.service_arn] && e.created_at <= last_events[s.service_arn].created_at
-
-                    EcsDeploy.logger.info e.message
-                    last_events[s.service_arn] = e
-                  end
                 end
+                service = ss.detect {|sc| sc.cluster == File.basename(s.cluster_arn) && sc.service_name == s.service_name }
+                service.log_events(s)
               end
               break if chunked_service_names.empty?
               sleep EcsDeploy.config.ecs_wait_until_services_stable_delay
