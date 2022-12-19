@@ -7,7 +7,7 @@ module EcsDeploy
 
     class TooManyAttemptsError < StandardError; end
 
-    attr_reader :cluster, :region, :service_name, :delete
+    attr_reader :cluster, :region, :service_name, :delete, :deploy_started_at
 
     def initialize(
       cluster:, service_name:, task_definition_name: nil, revision: nil,
@@ -61,6 +61,7 @@ module EcsDeploy
     end
 
     def deploy
+      @deploy_started_at = Time.now
       res = @client.describe_services(cluster: @cluster, services: [@service_name])
       service_options = {
         cluster: @cluster,
@@ -172,6 +173,7 @@ module EcsDeploy
         client = Aws::ECS::Client.new(region: region)
         ss.reject(&:delete).map(&:service_name).each_slice(MAX_DESCRIBE_SERVICES).map do |chunked_service_names|
           Thread.new do
+            last_events = {}
             EcsDeploy.config.ecs_wait_until_services_stable_max_attempts.times do
               EcsDeploy.logger.info "wait service stable [#{chunked_service_names.join(", ")}] [#{cl}]"
               resp = client.describe_services(cluster: cl, services: chunked_service_names)
@@ -179,6 +181,15 @@ module EcsDeploy
                 # cf. https://github.com/aws/aws-sdk-ruby/blob/master/gems/aws-sdk-ecs/lib/aws-sdk-ecs/waiters.rb#L91-L96
                 if s.deployments.size == 1 && s.running_count == s.desired_count
                   chunked_service_names.delete(s.service_name)
+                else
+                  service = ss.detect { _1.cluster == File.basename(s.cluster_arn) && _1.service_name == s.service_name }
+                  s.events.sort_by(&:created_at).each do |e|
+                    next if e.created_at <= service.deploy_started_at
+                    next if last_events[s.service_arn] && e.created_at <= last_events[s.service_arn].created_at
+
+                    EcsDeploy.logger.info e.message
+                    last_events[s.service_arn] = e
+                  end
                 end
               end
               break if chunked_service_names.empty?
