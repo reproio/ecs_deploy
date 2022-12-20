@@ -7,7 +7,7 @@ module EcsDeploy
 
     class TooManyAttemptsError < StandardError; end
 
-    attr_reader :cluster, :region, :service_name, :delete
+    attr_reader :cluster, :region, :service_name, :delete, :deploy_started_at
 
     def initialize(
       cluster:, service_name:, task_definition_name: nil, revision: nil,
@@ -61,6 +61,7 @@ module EcsDeploy
     end
 
     def deploy
+      @deploy_started_at = Time.now
       res = @client.describe_services(cluster: @cluster, services: [@service_name])
       service_options = {
         cluster: @cluster,
@@ -167,6 +168,16 @@ module EcsDeploy
       end
     end
 
+    def log_events(ecs_service)
+      ecs_service.events.sort_by(&:created_at).each do |e|
+        next if e.created_at <= deploy_started_at
+        next if @last_event && e.created_at <= @last_event.created_at
+
+        EcsDeploy.logger.info e.message
+        @last_event = e
+      end
+    end
+
     def self.wait_all_running(services)
       services.group_by { |s| [s.cluster, s.region] }.flat_map do |(cl, region), ss|
         client = Aws::ECS::Client.new(region: region)
@@ -180,6 +191,8 @@ module EcsDeploy
                 if s.deployments.size == 1 && s.running_count == s.desired_count
                   chunked_service_names.delete(s.service_name)
                 end
+                service = ss.detect {|sc| sc.service_name == s.service_name }
+                service.log_events(s)
               end
               break if chunked_service_names.empty?
               sleep EcsDeploy.config.ecs_wait_until_services_stable_delay
