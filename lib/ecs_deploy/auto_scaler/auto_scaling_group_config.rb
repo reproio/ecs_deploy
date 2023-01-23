@@ -153,6 +153,9 @@ module EcsDeploy
             AutoScaler.error_logger.warn("#{log_prefix} The lifesycle state of #{i.instance_id} is \"#{i.lifecycle_state}\", so ignore it")
             next true
           end
+
+          @logger.info "#{i.instance_id}: #{i.lifecycle_state}"
+          false
         end.map(&:instance_id)
 
         return if orphans.empty?
