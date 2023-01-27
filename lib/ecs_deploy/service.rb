@@ -110,6 +110,7 @@ module EcsDeploy
 
         service_options.merge!({service: @service_name})
         service_options.merge!({desired_count: @desired_count}) if @desired_count
+        service_options.merge!({propagate_tags: @propagate_tags}) if @propagate_tags
 
         current_service = res.services[0]
         service_options.merge!({force_new_deployment: true}) if need_force_new_deployment?(current_service)
