@@ -82,7 +82,7 @@ module EcsDeploy
       def decrease_desired_capacity(count)
         container_instance_arns_in_service = cluster_resource_manager.fetch_container_instance_arns_in_service
         container_instances_in_cluster = cluster_resource_manager.fetch_container_instances_in_cluster
-        auto_scaling_group_instances = instances(reload: true)
+        auto_scaling_group_instances = describe_detachable_instances
         deregisterable_instances = container_instances_in_cluster.select do |i|
           i.pending_tasks_count == 0 &&
             !running_essential_task?(i, container_instance_arns_in_service) &&
@@ -144,15 +144,8 @@ module EcsDeploy
 
       def detach_and_terminate_orphan_instances
         container_instance_ids = cluster_resource_manager.fetch_container_instances_in_cluster.map(&:ec2_instance_id)
-        orphans = instances(reload: true).reject do |i|
+        orphans = describe_detachable_instances.reject do |i|
           next true if container_instance_ids.include?(i.instance_id)
-
-          # The lifecycle state of terminated instances becomes "Terminating", "Terminating:Wait", or "Terminating:Proceed",
-          # and we can't detach instances in such a state.
-          if i.lifecycle_state.start_with?("Terminating")
-            AutoScaler.error_logger.warn("#{log_prefix} The lifesycle state of #{i.instance_id} is \"#{i.lifecycle_state}\", so ignore it")
-            next true
-          end
         end.map(&:instance_id)
 
         return if orphans.empty?
@@ -184,14 +177,11 @@ module EcsDeploy
         )
       end
 
-      def instances(reload: false)
-        if reload || @instances.nil?
-          resp = client.describe_auto_scaling_groups({
-            auto_scaling_group_names: [name],
-          })
-          @instances = resp.auto_scaling_groups[0].instances
-        else
-          @instances
+      def describe_detachable_instances
+        client.describe_auto_scaling_groups({ auto_scaling_group_names: [name] }).auto_scaling_groups[0].instances.reject do |i|
+          # The lifecycle state of terminated instances becomes "Detaching", "Terminating", "Terminating:Wait", or "Terminating:Proceed",
+          # and we can't detach instances in such a state.
+          next true if i.lifecycle_state.start_with?("Terminating") || i.lifecycle_state == "Detaching"
         end
       end
 

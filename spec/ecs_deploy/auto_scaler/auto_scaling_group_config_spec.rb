@@ -35,6 +35,7 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
                   double(
                     availability_zone: i.attributes.find { |a| a.name == "ecs.availability-zone" }.value,
                     instance_id: i.ec2_instance_id,
+                    lifecycle_state: "InService",
                   )
                 end,
               )
@@ -278,6 +279,7 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
                   double(
                     availability_zone: i.availability_zone,
                     instance_id: i.instance_id,
+                    lifecycle_state: "InService",
                   )
                 end,
               )
