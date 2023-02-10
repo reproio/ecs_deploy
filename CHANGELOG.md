@@ -1,5 +1,31 @@
 # v1.0
 
+## Release v1.0.4 - 2023/02/10
+
+### Bug fixes
+
+- Fix Aws::AutoScaling::Errors::ValidationError https://github.com/reproio/ecs_deploy/pull/85
+
+- Fix Timeout::Error that occurs in trigger_capacity_update https://github.com/reproio/ecs_deploy/pull/80
+
+- use force a new deployment, when switching from launch type to capacity provider strategy on an existing service https://github.com/reproio/ecs_deploy/pull/75
+
+### Enhancement
+
+- Run test with Ruby 3.2 https://github.com/reproio/ecs_deploy/pull/83
+
+- Merge `propagate_tags` to service_options when updating service https://github.com/reproio/ecs_deploy/pull/82
+
+- Show service event logs while waiting for services https://github.com/reproio/ecs_deploy/pull/81
+
+- Stop supporting ruby 2.4 https://github.com/reproio/ecs_deploy/pull/79
+
+- Display warning that desired count has reached max value https://github.com/reproio/ecs_deploy/pull/78
+
+- Make draining feature opt-outable https://github.com/reproio/ecs_deploy/pull/77
+
+- Add capacity_provider_strategy options to Service https://github.com/reproio/ecs_deploy/pull/74
+
 ## Release v1.0.3 - 2021/11/17
 
 ### Bug fixes
