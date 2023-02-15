@@ -119,6 +119,9 @@ module EcsDeploy
         @response = @client.update_service(service_options)
         EcsDeploy.logger.info "update service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
       end
+    rescue ArgumentError => e
+      EcsDeploy.logger.info "#{e}"
+      EcsDeploy.logger.info "service_options: #{service_options}"
     end
 
     private def need_force_new_deployment?(service)
