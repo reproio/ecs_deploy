@@ -1,4 +1,5 @@
 require 'timeout'
+require 'json'
 
 module EcsDeploy
   class Service
@@ -121,7 +122,7 @@ module EcsDeploy
       end
     rescue ArgumentError => e
       EcsDeploy.logger.info "#{e}"
-      EcsDeploy.logger.info "service_options: #{service_options}"
+      EcsDeploy.logger.info "service_options: #{JSON.pretty_generate(service_options)}"
     end
 
     private def need_force_new_deployment?(service)
