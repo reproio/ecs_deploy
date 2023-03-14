@@ -17,7 +17,7 @@ module EcsDeploy
       # The following values are the default values of Aws::ECS::Waiters::ServicesStable
       @ecs_wait_until_services_stable_max_attempts = 40
       @ecs_wait_until_services_stable_delay = 15
-      @ecs_client_params = { retry_mode: "standard", max_attempts: 10 }
+      @ecs_client_params = {}
     end
   end
 end

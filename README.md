@@ -33,7 +33,7 @@ set :ecs_service_role, "customEcsServiceRole" # default: ecsServiceRole
 set :ecs_deploy_wait_timeout, 600 # default: 300
 set :ecs_wait_until_services_stable_max_attempts, 40 # optional
 set :ecs_wait_until_services_stable_delay, 15 # optional
-set :ecs_client_params, { retry_mode: "standard", max_attempts: 15 } # default: { retry_mode: "standard", max_attempts: 10 }
+set :ecs_client_params, { retry_mode: "standard", max_attempts: 10 } # default: {}
 
 set :ecs_tasks, [
   {
