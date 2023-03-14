@@ -10,6 +10,7 @@ namespace :ecs do
       c.default_region = Array(fetch(:ecs_region))[0] if fetch(:ecs_region)
       c.ecs_wait_until_services_stable_max_attempts = fetch(:ecs_wait_until_services_stable_max_attempts) if fetch(:ecs_wait_until_services_stable_max_attempts)
       c.ecs_wait_until_services_stable_delay = fetch(:ecs_wait_until_services_stable_delay) if fetch(:ecs_wait_until_services_stable_delay)
+      c.ecs_client_params = fetch(:ecs_client_params) if fetch(:ecs_client_params)
     end
 
     if ENV["TARGET_CLUSTER"]

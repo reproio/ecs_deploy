@@ -49,7 +49,8 @@ module EcsDeploy
       @response = nil
 
       region ||= EcsDeploy.config.default_region
-      @client = region ? Aws::ECS::Client.new(region: region) : Aws::ECS::Client.new
+      params ||= EcsDeploy.config.ecs_client_params
+      @client = region ? Aws::ECS::Client.new(params.merge(region: region)) : Aws::ECS::Client.new(params)
       @region = @client.config.region
 
       @delete = delete
@@ -181,7 +182,8 @@ module EcsDeploy
 
     def self.wait_all_running(services)
       services.group_by { |s| [s.cluster, s.region] }.flat_map do |(cl, region), ss|
-        client = Aws::ECS::Client.new(region: region)
+        params ||= EcsDeploy.config.ecs_client_params
+        client = Aws::ECS::Client.new(params.merge(region: region))
         ss.reject(&:delete).map(&:service_name).each_slice(MAX_DESCRIBE_SERVICES).map do |chunked_service_names|
           Thread.new do
             EcsDeploy.config.ecs_wait_until_services_stable_max_attempts.times do
