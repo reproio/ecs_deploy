@@ -1,5 +1,11 @@
 # v1.0
 
+## Release v1.0.5 - 2023/03/15
+
+### Enhancement
+
+- Add variable of capistrano `ecs_client_retry_params` to override parameter of ECS::Client#initialize https://github.com/reproio/ecs_deploy/pull/88
+
 ## Release v1.0.4 - 2023/02/10
 
 ### Bug fixes
