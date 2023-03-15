@@ -27,9 +27,10 @@ module EcsDeploy
       @platform_version = platform_version
       @group = group
       region ||= EcsDeploy.config.default_region
+      params ||= EcsDeploy.config.ecs_client_params
       @container_overrides = container_overrides
 
-      @client = region ? Aws::ECS::Client.new(region: region) : Aws::ECS::Client.new
+      @client = region ? Aws::ECS::Client.new(params.merge(region: region)) : Aws::ECS::Client.new(params)
       @region = @client.config.region
       @cloud_watch_events = Aws::CloudWatchEvents::Client.new(region: @region)
     end

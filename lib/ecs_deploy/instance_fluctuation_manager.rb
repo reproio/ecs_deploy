@@ -113,7 +113,7 @@ module EcsDeploy
     end
 
     def ecs_client
-      @ecs_client ||= Aws::ECS::Client.new(aws_params)
+      @ecs_client ||= Aws::ECS::Client.new(aws_params.merge(EcsDeploy.config.ecs_client_params))
     end
 
     def fetch_auto_scaling_group

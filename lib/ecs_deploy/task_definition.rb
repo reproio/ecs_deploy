@@ -1,15 +1,9 @@
 module EcsDeploy
   class TaskDefinition
-    RETRY_BACKOFF = lambda do |c|
-      sleep(1)
-    end
-
-    RETRY_LIMIT = 10
-
     def self.deregister(arn, region: nil)
       region ||= EcsDeploy.config.default_region
-      param = {retry_backoff: RETRY_BACKOFF, retry_limit: RETRY_LIMIT}
-      client = region ? Aws::ECS::Client.new(param.merge(region: region)) : Aws::ECS::Client.new(param)
+      params ||= EcsDeploy.config.ecs_client_params
+      client = region ? Aws::ECS::Client.new(params.merge(region: region)) : Aws::ECS::Client.new(params)
       client.deregister_task_definition({
         task_definition: arn,
       })
@@ -29,6 +23,7 @@ module EcsDeploy
       @task_role_arn        = task_role_arn
       @execution_role_arn   = execution_role_arn
       region ||= EcsDeploy.config.default_region
+      params ||= EcsDeploy.config.ecs_client_params
 
       @container_definitions = container_definitions.map do |cd|
         if cd[:docker_labels]
@@ -46,8 +41,7 @@ module EcsDeploy
       @cpu = cpu&.to_s
       @memory = memory&.to_s
       @tags = tags
-      param = {retry_backoff: RETRY_BACKOFF, retry_limit: RETRY_LIMIT}
-      @client = region ? Aws::ECS::Client.new(param.merge(region: region)) : Aws::ECS::Client.new(param)
+      @client = region ? Aws::ECS::Client.new(params.merge(region: region)) : Aws::ECS::Client.new(params)
       @region = @client.config.region
     end
 
