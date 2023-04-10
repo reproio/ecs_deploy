@@ -106,7 +106,7 @@ module EcsDeploy
           service_options.delete(:placement_strategy)
         end
         @response = @client.create_service(service_options)
-        EcsDeploy.logger.info "create service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
+        EcsDeploy.logger.info "created service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
       else
         return delete_service if @delete
 
@@ -122,7 +122,7 @@ module EcsDeploy
           service_options.delete(:placement_strategy)
         end
         @response = @client.update_service(service_options)
-        EcsDeploy.logger.info "update service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
+        EcsDeploy.logger.info "updated service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
       end
     end
 
@@ -149,7 +149,7 @@ module EcsDeploy
         sleep 1
       end
       @client.delete_service(cluster: @cluster, service: @service_name)
-      EcsDeploy.logger.info "delete service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
+      EcsDeploy.logger.info "deleted service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
     end
 
     def update_tags(service_name, tags)
@@ -191,7 +191,7 @@ module EcsDeploy
         ss.reject(&:delete).map(&:service_name).each_slice(MAX_DESCRIBE_SERVICES).map do |chunked_service_names|
           Thread.new do
             EcsDeploy.config.ecs_wait_until_services_stable_max_attempts.times do
-              EcsDeploy.logger.info "wait service stable [#{chunked_service_names.join(", ")}] [#{cl}]"
+              EcsDeploy.logger.info "waiting for services to stabilize [#{chunked_service_names.join(", ")}] [#{cl}]"
               resp = client.describe_services(cluster: cl, services: chunked_service_names)
               resp.services.each do |s|
                 # cf. https://github.com/aws/aws-sdk-ruby/blob/master/gems/aws-sdk-ecs/lib/aws-sdk-ecs/waiters.rb#L91-L96

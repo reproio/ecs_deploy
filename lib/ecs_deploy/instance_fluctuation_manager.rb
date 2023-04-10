@@ -21,7 +21,7 @@ module EcsDeploy
     def increase
       asg = fetch_auto_scaling_group
 
-      @logger.info("Increase desired capacity of #{@auto_scaling_group_name}: #{asg.desired_capacity} => #{asg.max_size}")
+      @logger.info("Increasing desired capacity of #{@auto_scaling_group_name}: #{asg.desired_capacity} => #{asg.max_size}")
       as_client.update_auto_scaling_group(auto_scaling_group_name: @auto_scaling_group_name, desired_capacity: asg.max_size)
 
       # Run in background because increasing instances may take time
@@ -47,7 +47,7 @@ module EcsDeploy
         @logger.info("The capacity is already #{asg.desired_capacity}")
         return
       end
-      @logger.info("Decrease desired capacity of #{@auto_scaling_group_name}: #{asg.desired_capacity} => #{@desired_capacity}")
+      @logger.info("Decreasing desired capacity of #{@auto_scaling_group_name}: #{asg.desired_capacity} => #{@desired_capacity}")
 
       container_instances = ecs_client.list_container_instances(cluster: @cluster).flat_map do |resp|
         ecs_client.describe_container_instances(

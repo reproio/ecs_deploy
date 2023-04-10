@@ -40,7 +40,7 @@ module EcsDeploy
           next if difference >= trigger.step
 
           if trigger.match?
-            @logger.info "#{log_prefix} Fire upscale trigger by #{trigger.alarm_name} #{trigger.state}"
+            @logger.info "#{log_prefix} Firing upscale trigger by #{trigger.alarm_name} #{trigger.state}"
             difference = trigger.step
           end
         end
@@ -50,7 +50,7 @@ module EcsDeploy
             next if difference > 0 && !trigger.prioritized_over_upscale_triggers?
             next unless trigger.match?
 
-            @logger.info "#{log_prefix} Fire downscale trigger by #{trigger.alarm_name} #{trigger.state}"
+            @logger.info "#{log_prefix} Firing downscale trigger by #{trigger.alarm_name} #{trigger.state}"
             difference = [difference, -trigger.step].min
           end
         end
@@ -124,28 +124,28 @@ module EcsDeploy
         if current_level < next_level && overheat? # next max
           level = next_level
           @reach_max_at = nil
-          @logger.info "#{log_prefix} Service is overheat, uses next max count"
+          @logger.info "#{log_prefix} Service is overheated, uses next max count"
         elsif current_level < next_level && !overheat? # wait cooldown
           level = current_level
           now = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
           @reach_max_at ||= now
-          @logger.info "#{log_prefix} Service waits cooldown elapsed #{(now - @reach_max_at).to_i}sec"
+          @logger.info "#{log_prefix} Service waiting for cooldown period to elapse #{(now - @reach_max_at).to_i}sec"
         elsif current_level == next_level && next_desired_count >= max_task_count[current_level] # reach current max
           level = current_level
           now = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
           @reach_max_at ||= now
-          @logger.info "#{log_prefix} Service waits cooldown elapsed #{(now - @reach_max_at).to_i}sec"
+          @logger.info "#{log_prefix} Service waiting for cooldown period to elapse #{(now - @reach_max_at).to_i}sec"
           if next_desired_count > max_task_count[current_level] && current_level == max_task_count.size - 1
             @logger.warn "#{log_prefix} Desired count has reached the maximum value and couldn't be increased"
           end
         elsif current_level == next_level && next_desired_count < max_task_count[current_level]
           level = current_level
           @reach_max_at = nil
-          @logger.info "#{log_prefix} Service clears cooldown state"
+          @logger.info "#{log_prefix} Service has finished cooling down"
         elsif current_level > next_level
           level = next_level
           @reach_max_at = nil
-          @logger.info "#{log_prefix} Service clears cooldown state"
+          @logger.info "#{log_prefix} Service has finished cooling down"
         end
 
         next_desired_count = [next_desired_count, max_task_count[level]].min
@@ -156,7 +156,7 @@ module EcsDeploy
         end
 
         @last_updated_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :second)
-        @logger.info "#{log_prefix} Update desired_count to #{next_desired_count}"
+        @logger.info "#{log_prefix} Updated desired_count to #{next_desired_count}"
       rescue => e
         AutoScaler.error_logger.error(e)
       end
@@ -197,7 +197,7 @@ module EcsDeploy
 
         cl.wait_until(:services_stable, cluster: cluster, services: [name]) do |w|
           w.before_wait do
-            @logger.debug "#{log_prefix} wait service stable"
+            @logger.debug "#{log_prefix} waiting for service to stabilize"
           end
         end
 
@@ -205,7 +205,7 @@ module EcsDeploy
         stopping_task_arns.each_slice(MAX_DESCRIBABLE_TASK_COUNT) do |arns|
           cl.wait_until(:tasks_stopped, cluster: cluster, tasks: arns) do |w|
             w.before_wait do
-              @logger.debug "#{log_prefix} wait stopping tasks stopped"
+              @logger.debug "#{log_prefix} waiting for tasks to finish stopping"
             end
           end
         end

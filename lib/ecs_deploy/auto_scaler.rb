@@ -50,7 +50,7 @@ module EcsDeploy
         loop_with_polling_interval("loop of #{cluster_scaling_config.name}") do
           ths = cluster_scaling_config.service_configs.map do |service_config|
             Thread.new(service_config) do |s|
-              @logger.debug "Start service scaling of #{s.name}"
+              @logger.debug "Scaling service #{s.name}"
               s.adjust_desired_count(cluster_scaling_config.cluster_resource_manager)
             end
           end
@@ -58,7 +58,7 @@ module EcsDeploy
 
           ths.each(&:join)
 
-          @logger.debug "Start cluster scaling of #{cluster_scaling_config.name}"
+          @logger.debug "Scaling cluster #{cluster_scaling_config.name}"
 
           required_capacity = cluster_scaling_config.service_configs.sum { |s| s.desired_count * s.required_capacity }
           cluster_scaling_config.update_desired_capacity(required_capacity)

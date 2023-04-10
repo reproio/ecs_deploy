@@ -43,7 +43,7 @@ module EcsDeploy
           # Wait until the capacity is updated to prevent the process from terminating before container draining is completed
           wait_until_capacity_updated: desired_capacity < request_config.target_capacity,
         )
-        @logger.info "#{log_prefix} Update desired_capacity to #{desired_capacity}"
+        @logger.info "#{log_prefix} Updated desired_capacity to #{desired_capacity}"
       rescue => e
         AutoScaler.error_logger.error(e)
       end
