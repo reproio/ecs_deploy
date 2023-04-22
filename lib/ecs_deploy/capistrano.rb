@@ -55,7 +55,7 @@ namespace :ecs do
   task deploy_scheduled_task: [:configure, :register_task_definition] do
     if fetch(:ecs_scheduled_tasks)
       regions = Array(fetch(:ecs_region))
-      regions = [nil] if regions.empty?
+      regions = [EcsDeploy.config.default_region] if regions.empty?
       regions.each do |r|
         fetch(:ecs_scheduled_tasks).each do |t|
           scheduled_task = EcsDeploy::ScheduledTask.new(
@@ -85,7 +85,7 @@ namespace :ecs do
   task deploy: [:configure, :register_task_definition] do
     if fetch(:ecs_services)
       regions = Array(fetch(:ecs_region))
-      regions = [nil] if regions.empty?
+      regions = [EcsDeploy.config.default_region] if regions.empty?
       regions.each do |r|
         services = fetch(:ecs_services).map do |service|
           if fetch(:target_cluster) && fetch(:target_cluster).size > 0
@@ -128,7 +128,7 @@ namespace :ecs do
   task rollback: [:configure] do
     if fetch(:ecs_services)
       regions = Array(fetch(:ecs_region))
-      regions = [nil] if regions.empty?
+      regions = [EcsDeploy.config.default_region] if regions.empty?
 
       rollback_routes = {}
       regions.each do |r|
