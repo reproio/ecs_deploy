@@ -17,7 +17,8 @@ module EcsDeploy
       execution_role_arn: nil,
       requires_compatibilities: nil,
       cpu: nil, memory: nil,
-      tags: nil
+      tags: nil,
+      runtime_platform: {}
     )
       @task_definition_name = task_definition_name
       @task_role_arn        = task_role_arn
@@ -43,6 +44,7 @@ module EcsDeploy
       @tags = tags
       @client = region ? Aws::ECS::Client.new(params.merge(region: region)) : Aws::ECS::Client.new(params)
       @region = @client.config.region
+      @runtime_platform = runtime_platform
     end
 
     def recent_task_definition_arns
@@ -66,7 +68,8 @@ module EcsDeploy
         execution_role_arn: @execution_role_arn,
         requires_compatibilities: @requires_compatibilities,
         cpu: @cpu, memory: @memory,
-        tags: @tags
+        tags: @tags,
+        runtime_platform: @runtime_platform
       })
       EcsDeploy.logger.info "register task definition [#{@task_definition_name}] [#{@region}] [#{Paint['OK', :green]}]"
       res.task_definition

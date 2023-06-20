@@ -42,6 +42,7 @@ namespace :ecs do
             cpu: t[:cpu],
             memory: t[:memory],
             tags: t[:tags],
+            runtime_platform: t[:runtime_platform],
           )
           result = task_definition.register
           ecs_registered_tasks[region][t[:name]] = result
