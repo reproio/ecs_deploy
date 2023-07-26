@@ -103,6 +103,7 @@ module EcsDeploy
         if @scheduling_strategy == 'DAEMON'
           service_options[:scheduling_strategy] = @scheduling_strategy
           service_options.delete(:desired_count)
+          service_options.delete(:placement_strategy)
         end
         @response = @client.create_service(service_options)
         EcsDeploy.logger.info "create service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
@@ -117,6 +118,9 @@ module EcsDeploy
         service_options.merge!({force_new_deployment: true}) if need_force_new_deployment?(current_service)
 
         update_tags(@service_name, @tags)
+        if @scheduling_strategy == 'DAEMON'
+          service_options.delete(:placement_strategy)
+        end
         @response = @client.update_service(service_options)
         EcsDeploy.logger.info "update service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
       end
