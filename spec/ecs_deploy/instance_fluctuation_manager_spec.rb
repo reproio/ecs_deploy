@@ -60,7 +60,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
         thread = instance_fluctuation_manager.increase
         thread.join
         log = logdev.string
-        expect(log).to include("Increase desired capacity of asg-cluster: 50 => 100")
+        expect(log).to include("Increasing desired capacity of asg-cluster: 50 => 100")
         [60, 70, 80, 90].each do |count|
           expect(log).to include("Current registered instance count: #{count}")
         end
@@ -151,7 +151,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
       it "succeeded in decreasing instances" do
         instance_fluctuation_manager.decrease
         log = logdev.string
-        expect(log).to include("Decrease desired capacity of asg-cluster: 100 => 50")
+        expect(log).to include("Decreasing desired capacity of asg-cluster: 100 => 50")
         expect(log).to include("Succeeded in decreasing instances!")
         instance_size_per_az = log.lines.grep(/AZ balance/).last.scan(/AZ balance: \{"zone-a"=>(\d+), "zone-b"=>(\d+)\}/).flatten.map(&:to_i)
         expect(instance_size_per_az).to contain_exactly(25, 25)
@@ -251,7 +251,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
         it "succeeded in decreasing instances" do
           instance_fluctuation_manager.decrease
           log = logdev.string
-          expect(log).to include("Decrease desired capacity of asg-cluster: 100 => 60")
+          expect(log).to include("Decreasing desired capacity of asg-cluster: 100 => 60")
           expect(log).to include("Succeeded in decreasing instances!")
           instance_size_per_az = log.lines.grep(/AZ balance/).last.scan(/AZ balance: \{"zone-a"=>(\d+), "zone-b"=>(\d+), "zone-c"=>(\d+)\}/).flatten.map(&:to_i)
           expect(instance_size_per_az).to contain_exactly(20, 20, 20)
@@ -272,7 +272,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
         it "succeeded in decreasing instances" do
           instance_fluctuation_manager.decrease
           log = logdev.string
-          expect(log).to include("Decrease desired capacity of asg-cluster: 100 => 53")
+          expect(log).to include("Decreasing desired capacity of asg-cluster: 100 => 53")
           expect(log).to include("Succeeded in decreasing instances!")
           instance_size_per_az = log.lines.grep(/AZ balance/).last.scan(/AZ balance: \{"zone-a"=>(\d+), "zone-b"=>(\d+), "zone-c"=>(\d+)\}/).flatten.map(&:to_i)
           expect(instance_size_per_az).to contain_exactly(17, 18, 18)
@@ -394,7 +394,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
 
         instance_fluctuation_manager.decrease
         log = logdev.string
-        expect(log).to include("Decrease desired capacity of asg-cluster: 1 => 0")
+        expect(log).to include("Decreasing desired capacity of asg-cluster: 1 => 0")
         expect(log).to include("Succeeded in decreasing instances!")
       end
     end
