@@ -192,7 +192,7 @@ The autoscaler of `ecs_deploy` supports auto scaling of ECS services and cluster
 
 ### Prerequisits
 
-* An ECS cluster whose instances belong to either an autoscaling group or a spot fleet request
+* An ECS cluster whose instances belong to either an Auto Scaling group or a Spot Fleet request
 * You have CloudWatch alarms and you want to scale services when their state changes
 
 ### How to use autoscaler
