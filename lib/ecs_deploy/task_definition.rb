@@ -7,7 +7,7 @@ module EcsDeploy
       client.deregister_task_definition({
         task_definition: arn,
       })
-      EcsDeploy.logger.info "deregister task definition [#{arn}] [#{client.config.region}] [#{Paint['OK', :green]}]"
+      EcsDeploy.logger.info "deregistered task definition [#{arn}] [#{client.config.region}] [#{Paint['OK', :green]}]"
     end
 
     def initialize(
@@ -71,7 +71,7 @@ module EcsDeploy
         tags: @tags,
         runtime_platform: @runtime_platform
       })
-      EcsDeploy.logger.info "register task definition [#{@task_definition_name}] [#{@region}] [#{Paint['OK', :green]}]"
+      EcsDeploy.logger.info "registered task definition [#{@task_definition_name}] [#{@region}] [#{Paint['OK', :green]}]"
       res.task_definition
     end
   end

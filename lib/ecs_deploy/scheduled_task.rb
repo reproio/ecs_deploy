@@ -62,7 +62,7 @@ module EcsDeploy
         state: @enabled ? "ENABLED" : "DISABLED",
         description: @description,
       )
-      EcsDeploy.logger.info "create cloudwatch event rule [#{res.rule_arn}] [#{@region}] [#{Paint['OK', :green]}]"
+      EcsDeploy.logger.info "created cloudwatch event rule [#{res.rule_arn}] [#{@region}] [#{Paint['OK', :green]}]"
     end
 
     def put_targets
@@ -90,7 +90,7 @@ module EcsDeploy
         targets: [target]
       )
       if res.failed_entry_count.zero?
-        EcsDeploy.logger.info "create cloudwatch event target [#{@target_id}] [#{@region}] [#{Paint['OK', :green]}]"
+        EcsDeploy.logger.info "created cloudwatch event target [#{@target_id}] [#{@region}] [#{Paint['OK', :green]}]"
       else
         res.failed_entries.each do |entry|
           EcsDeploy.logger.error "failed to create cloudwatch event target [#{@region}] target_id=#{entry.target_id} error_code=#{entry.error_code} error_message=#{entry.error_message}"

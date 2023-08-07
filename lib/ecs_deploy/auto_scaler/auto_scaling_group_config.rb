@@ -35,7 +35,7 @@ module EcsDeploy
           if decreased_capacity > 0
             new_desired_capacity = current_asg.desired_capacity - decreased_capacity
             cluster_resource_manager.trigger_capacity_update(current_asg.desired_capacity, new_desired_capacity)
-            @logger.info "#{log_prefix} Update desired_capacity to #{new_desired_capacity}"
+            @logger.info "#{log_prefix} Updated desired_capacity to #{new_desired_capacity}"
           else
             @logger.info "#{log_prefix} Tried to Update desired_capacity but there were no deregisterable instances"
           end
@@ -47,7 +47,7 @@ module EcsDeploy
             desired_capacity: desired_capacity,
           )
           cluster_resource_manager.trigger_capacity_update(current_asg.desired_capacity, desired_capacity)
-          @logger.info "#{log_prefix} Update desired_capacity to #{desired_capacity}"
+          @logger.info "#{log_prefix} Updated desired_capacity to #{desired_capacity}"
         end
       rescue => e
         AutoScaler.error_logger.error(e)
@@ -74,7 +74,7 @@ module EcsDeploy
           )
         end
 
-        @logger.info "#{log_prefix} Detach instances from ASG: #{instance_ids.inspect}"
+        @logger.info "#{log_prefix} Detached instances from ASG: #{instance_ids.inspect}"
       end
 
       private
@@ -89,7 +89,7 @@ module EcsDeploy
             auto_scaling_group_instances.any? {|instance| instance.instance_id == i.ec2_instance_id }
         end
 
-        @logger.info "#{log_prefix} Fetch deregisterable instances: #{deregisterable_instances.map(&:ec2_instance_id).inspect}"
+        @logger.info "#{log_prefix} Fetched deregisterable instances: #{deregisterable_instances.map(&:ec2_instance_id).inspect}"
 
         az_to_instance_count = auto_scaling_group_instances.each_with_object(Hash.new(0)) { |i, h| h[i.availability_zone] += 1 }
         az_to_deregisterable_instances = deregisterable_instances.group_by do |i|

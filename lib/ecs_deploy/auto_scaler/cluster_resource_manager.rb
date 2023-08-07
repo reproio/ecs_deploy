@@ -27,7 +27,7 @@ module EcsDeploy
 
       def acquire(capacity, timeout: nil)
         @mutex.synchronize do
-          @logger&.debug("#{log_prefix} Try to acquire #{capacity} capacity (capacity: #{@capacity}, used_capacity: #{@used_capacity})")
+          @logger&.debug("#{log_prefix} Trying to acquire #{capacity} capacity (capacity: #{@capacity}, used_capacity: #{@used_capacity})")
           Timeout.timeout(timeout) do
             while @capacity - @used_capacity < capacity
               @resource.wait(@mutex)
@@ -77,7 +77,7 @@ module EcsDeploy
         return if new_desired_capacity == old_desired_capacity
 
         th = Thread.new do
-          @logger&.info "#{log_prefix} Start updating capacity: #{old_desired_capacity} -> #{new_desired_capacity}"
+          @logger&.info "#{log_prefix} Updating capacity: #{old_desired_capacity} -> #{new_desired_capacity}"
           Timeout.timeout(180) do
             until @capacity == new_desired_capacity ||
                 (new_desired_capacity > old_desired_capacity && @capacity > new_desired_capacity) ||
@@ -91,7 +91,7 @@ module EcsDeploy
 
               sleep interval
             end
-            @logger&.info "#{log_prefix} capacity is updated to #{@capacity}"
+            @logger&.info "#{log_prefix} updated capacity to #{@capacity}"
           end
         rescue Timeout::Error => e
           msg = "#{log_prefix} `#{__method__}': #{e} (#{e.class})"
@@ -108,7 +108,7 @@ module EcsDeploy
         end
 
         if wait_until_capacity_updated
-          @logger&.info "#{log_prefix} Wait for the capacity of active instances to become #{new_desired_capacity} from #{old_desired_capacity}"
+          @logger&.info "#{log_prefix} Waiting for the number of active instances to reach #{new_desired_capacity} (from #{old_desired_capacity})"
           th.join
         end
       end

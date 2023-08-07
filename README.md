@@ -1,30 +1,26 @@
 # EcsDeploy
 
-Helper script for deployment to Amazon ECS.
+Helper script for deployment to Amazon ECS, designed to be compatible with `capistrano`. 
 
 This gem is experimental.
-
-Main purpose is combination with capistrano API.
 
 ## Installation
 
 Add this line to your application's Gemfile:
 
 ```ruby
-gem 'ecs_deploy', github: "reproio/ecs_deploy"
+gem "ecs_deploy", github: "reproio/ecs_deploy"
 ```
 
 And then execute:
 
     $ bundle
 
-## Usage
-
-Use by Capistrano.
+## Configuration
 
 ```ruby
 # Capfile
-require 'ecs_deploy/capistrano'
+require "ecs_deploy/capistrano"
 
 # deploy.rb
 set :ecs_default_cluster, "ecs-cluster-name"
@@ -93,11 +89,11 @@ set :ecs_tasks, [
 
 set :ecs_scheduled_tasks, [
   {
-    cluster: "default", # Unless this key, use fetch(:ecs_default_cluster)
+    cluster: "default", # Defaults to fetch(:ecs_default_cluster)
     rule_name: "schedule_name",
     schedule_expression: "cron(0 12 * * ? *)",
     description: "schedule_description", # Optional
-    target_id: "task_name", # Unless this key, use task_definition_name
+    target_id: "task_name", # Defaults to the task_definition_name
     task_definition_name: "myapp-#{fetch(:rails_env)}",
     task_count: 2, # Default 1
     revision: 12, # Optional
@@ -130,12 +126,14 @@ set :ecs_services, [
 ]
 ```
 
-```sh
-cap <stage> ecs:register_task_definition # register ecs_tasks as TaskDefinition
-cap <stage> ecs:deploy_scheduled_task # register ecs_scheduled_tasks to CloudWatchEvent
-cap <stage> ecs:deploy # create or update Service by ecs_services info
+## Usage
 
-cap <stage> ecs:rollback # deregister current task definition and update Service by previous revision of current task definition
+```sh
+bundle exec cap <stage> ecs:register_task_definition # register ecs_tasks as TaskDefinition
+bundle exec cap <stage> ecs:deploy_scheduled_task # register ecs_scheduled_tasks to CloudWatchEvent
+bundle exec cap <stage> ecs:deploy # create or update Service by ecs_services info
+
+bundle exec cap <stage> ecs:rollback # deregister current task definition and update Service by previous revision of current task definition
 ```
 
 ### Rollback example
@@ -194,7 +192,7 @@ The autoscaler of `ecs_deploy` supports auto scaling of ECS services and cluster
 
 ### Prerequisits
 
-* You use a ECS cluster whose instances belong to either an auto scaling group or a spot fleet request
+* An ECS cluster whose instances belong to either an Auto Scaling group or a Spot Fleet request
 * You have CloudWatch alarms and you want to scale services when their state changes
 
 ### How to use autoscaler
@@ -283,7 +281,7 @@ Then, execute the following command:
 ecs_auto_scaler <config yaml>
 ```
 
-I recommends deploy `ecs_auto_scaler` on ECS too.
+It is recommended to run the `ecs_auto_scaler` via a container on ECS.
 
 ### Signals
 
@@ -460,7 +458,7 @@ The following permissions are required for the preceding configuration of "repro
 
 ### How to deploy faster with Auto Scaling Group
 
-Add following configuration to your deploy.rb and hooks if you need.
+Add the following configuration and hooks to your `config/deploy.rb`:
 
 ```ruby
 # deploy.rb

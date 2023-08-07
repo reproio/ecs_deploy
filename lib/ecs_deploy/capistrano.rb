@@ -166,7 +166,7 @@ namespace :ecs do
 
           EcsDeploy.logger.info "#{current_task_definition_arn} -> #{rollback_arn}"
 
-          raise "Past task_definition_arns is nothing" unless rollback_arn
+          raise "Past task_definition_arns is empty" unless rollback_arn
 
           service_options = {
             region: r,
