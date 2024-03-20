@@ -1,5 +1,7 @@
 require "spec_helper"
 
+require "securerandom"
+
 require "ecs_deploy/auto_scaler/auto_scaling_group_config"
 require "ecs_deploy/auto_scaler/instance_drainer"
 
@@ -35,6 +37,7 @@ RSpec.describe EcsDeploy::AutoScaler::InstanceDrainer do
     let(:messages) do
       instances.map do |i|
         {
+          message_id: SecureRandom.uuid,
           body: %Q|{"version":"0","id":"478e68b4-9ad3-1fb4-e8a2-aef2d793738d","detail-type":"EC2 Spot Instance Interruption Warning","source":"aws.ec2","account":"1234","time":"2019-10-05T14:19:37Z","region":"ap-northeast-1","resources":["arn:aws:ec2:ap-northeast-1a:instance/#{i[:instance_id]}"],"detail":{"instance-id":"#{i[:instance_id]}","instance-action":"terminate"}}|,
         }
       end
