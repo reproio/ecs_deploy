@@ -1,5 +1,16 @@
 # v1.0
 
+## Release v1.0.6 - 2024/03/19
+
+### Enhancement
+
+- Make region fallback logic consistent in Capistrano tasks https://github.com/reproio/ecs_deploy/pull/91
+- Add runtime_platform to task_definition. https://github.com/reproio/ecs_deploy/pull/92
+
+### Bug fixes
+
+- Delete option :placement_strategy if DAEMON service https://github.com/reproio/ecs_deploy/pull/93
+
 ## Release v1.0.5 - 2023/03/15
 
 ### Enhancement
