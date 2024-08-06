@@ -63,10 +63,14 @@ module EcsDeploy
         )
       end
 
+      # NOTE: InstanceDrainer calls this method when it receives spot instance interruption warnings
       def detach_instances(instance_ids:, should_decrement_desired_capacity:)
         return if instance_ids.empty?
 
-        instance_ids.each_slice(MAX_DETACHABLE_INSTANCE_COUNT) do |ids|
+        # detach only detachable instances
+        detachable_instance_ids = instance_ids & describe_detachable_instances.map(&:instance_id)
+
+        detachable_instance_ids.each_slice(MAX_DETACHABLE_INSTANCE_COUNT) do |ids|
           client.detach_instances(
             auto_scaling_group_name: name,
             instance_ids: ids,
