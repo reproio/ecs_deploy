@@ -308,4 +308,85 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
       end
     end
   end
+
+  describe "#detach_instances" do
+    subject(:auto_scaling_group_config) do
+      described_class.new({
+        "name"   => asg_name,
+        "region" => "ap-northeast-1",
+        "buffer" => 0,
+        "services" => [],
+      }, Logger.new(nil))
+    end
+
+    let(:asg_name) { "asg_name" }
+    let(:auto_scaling_group_instances) do
+      [
+        Aws::AutoScaling::Types::Instance.new(
+          instance_id: "i-000000",
+          availability_zone: "ap-notrheast-1a",
+          lifecycle_state: "InService",
+          health_status: "Healthy",
+          launch_template: "launch_template",
+          protected_from_scale_in: true,
+        ),
+        Aws::AutoScaling::Types::Instance.new(
+          instance_id: "i-222222",
+          availability_zone: "ap-notrheast-1c",
+          lifecycle_state: "Standby",
+          health_status: "Healthy",
+          launch_template: "launch_template",
+          protected_from_scale_in: true,
+        ),
+        Aws::AutoScaling::Types::Instance.new(
+          instance_id: "i-333333",
+          availability_zone: "ap-notrheast-1c",
+          lifecycle_state: "Terminating",
+          health_status: "",
+          launch_template: "launch_template",
+          protected_from_scale_in: true,
+        ),
+        Aws::AutoScaling::Types::Instance.new(
+          instance_id: "i-444444",
+          availability_zone: "ap-notrheast-1c",
+          lifecycle_state: "Pending",
+          health_status: "",
+          launch_template: "launch_template",
+          protected_from_scale_in: true,
+        ),
+      ]
+    end
+
+    before do
+      allow_any_instance_of(Aws::AutoScaling::Client).to receive(:describe_auto_scaling_groups).with(
+        auto_scaling_group_names: [asg_name],
+      ).and_return(
+        double(
+          auto_scaling_groups: [
+            double(
+              desired_capacity: auto_scaling_group_instances.size,
+              instances: auto_scaling_group_instances.map do |i|
+                double(
+                  availability_zone: i.availability_zone,
+                  instance_id: i.instance_id,
+                  lifecycle_state: i.lifecycle_state,
+                )
+              end,
+            )
+          ]
+        )
+      )
+    end
+
+    it "detaches only detachable instances" do
+      expect_any_instance_of(Aws::AutoScaling::Client).to receive(:detach_instances).with(
+        auto_scaling_group_name: asg_name,
+        instance_ids: ["i-000000", "i-222222"],
+        should_decrement_desired_capacity: false,
+      )
+
+      auto_scaling_group_config.detach_instances(instance_ids: ["i-000000", "i-222222", "i-333333"], should_decrement_desired_capacity: false)
+    end
+  end
+
 end

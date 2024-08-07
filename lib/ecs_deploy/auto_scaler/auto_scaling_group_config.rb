@@ -63,10 +63,14 @@ module EcsDeploy
         )
       end
 
+      # NOTE: InstanceDrainer calls this method when it receives spot instance interruption warnings
       def detach_instances(instance_ids:, should_decrement_desired_capacity:)
         return if instance_ids.empty?
 
-        instance_ids.each_slice(MAX_DETACHABLE_INSTANCE_COUNT) do |ids|
+        # detach only detachable instances
+        detachable_instance_ids = instance_ids & describe_detachable_instances.map(&:instance_id)
+
+        detachable_instance_ids.each_slice(MAX_DETACHABLE_INSTANCE_COUNT) do |ids|
           client.detach_instances(
             auto_scaling_group_name: name,
             instance_ids: ids,
@@ -181,7 +185,9 @@ module EcsDeploy
         client.describe_auto_scaling_groups({ auto_scaling_group_names: [name] }).auto_scaling_groups[0].instances.reject do |i|
           # The lifecycle state of terminated instances becomes "Detaching", "Terminating", "Terminating:Wait", or "Terminating:Proceed",
           # and we can't detach instances in such a state.
-          i.lifecycle_state.start_with?("Terminating") || i.lifecycle_state == "Detaching"
+          i.lifecycle_state.start_with?("Terminating") || i.lifecycle_state == "Detaching" ||
+          # EC2 instance sometimes stays in Pending state for more than 10 minutes
+            i.lifecycle_state == "Pending"
         end
       end
 
