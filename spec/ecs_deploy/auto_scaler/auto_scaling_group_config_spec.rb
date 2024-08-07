@@ -346,6 +346,14 @@ RSpec.describe EcsDeploy::AutoScaler::AutoScalingGroupConfig do
           launch_template: "launch_template",
           protected_from_scale_in: true,
         ),
+        Aws::AutoScaling::Types::Instance.new(
+          instance_id: "i-444444",
+          availability_zone: "ap-notrheast-1c",
+          lifecycle_state: "Pending",
+          health_status: "",
+          launch_template: "launch_template",
+          protected_from_scale_in: true,
+        ),
       ]
     end
 

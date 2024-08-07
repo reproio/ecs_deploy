@@ -185,7 +185,9 @@ module EcsDeploy
         client.describe_auto_scaling_groups({ auto_scaling_group_names: [name] }).auto_scaling_groups[0].instances.reject do |i|
           # The lifecycle state of terminated instances becomes "Detaching", "Terminating", "Terminating:Wait", or "Terminating:Proceed",
           # and we can't detach instances in such a state.
-          i.lifecycle_state.start_with?("Terminating") || i.lifecycle_state == "Detaching"
+          i.lifecycle_state.start_with?("Terminating") || i.lifecycle_state == "Detaching" ||
+          # EC2 instance sometimes stays in Pending state for more than 10 minutes
+            i.lifecycle_state == "Pending"
         end
       end
 
