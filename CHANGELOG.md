@@ -1,5 +1,11 @@
 # v1.0
 
+## Release v1.0.7 - 2024/08/08
+
+### Bug fixes
+
+- Fix Aws::AutoScaling::Errors::ValidationError https://github.com/reproio/ecs_deploy/pull/85
+
 ## Release v1.0.6 - 2024/03/19
 
 ### Enhancement
