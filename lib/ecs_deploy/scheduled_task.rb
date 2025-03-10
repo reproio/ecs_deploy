@@ -15,7 +15,7 @@ module EcsDeploy
       @cluster = cluster
       @rule_name = rule_name
       @schedule_expression = schedule_expression
-      @enabled = enabled
+      @enabled = enabled != false # nil treated as true
       @description = description
       @target_id = target_id || task_definition_name
       @task_definition_name = task_definition_name
