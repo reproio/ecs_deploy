@@ -29,21 +29,8 @@ namespace :ecs do
       regions.each do |region|
         ecs_registered_tasks[region] = {}
         fetch(:ecs_tasks).each do |t|
-          task_definition = EcsDeploy::TaskDefinition.new(
-            region: region,
-            task_definition_name: t[:name],
-            container_definitions: t[:container_definitions],
-            task_role_arn: t[:task_role_arn],
-            execution_role_arn: t[:execution_role_arn],
-            volumes: t[:volumes],
-            network_mode: t[:network_mode],
-            placement_constraints: t[:placement_constraints],
-            requires_compatibilities: t[:requires_compatibilities],
-            cpu: t[:cpu],
-            memory: t[:memory],
-            tags: t[:tags],
-            runtime_platform: t[:runtime_platform],
-          )
+          args = t.merge({region: region, task_definition_name: t[:name]})
+          task_definition = EcsDeploy::TaskDefinition.new(**args)
           result = task_definition.register
           ecs_registered_tasks[region][t[:name]] = result
         end
@@ -59,24 +46,8 @@ namespace :ecs do
       regions = [EcsDeploy.config.default_region] if regions.empty?
       regions.each do |r|
         fetch(:ecs_scheduled_tasks).each do |t|
-          scheduled_task = EcsDeploy::ScheduledTask.new(
-            region: r,
-            cluster: t[:cluster] || fetch(:ecs_default_cluster),
-            rule_name: t[:rule_name],
-            schedule_expression: t[:schedule_expression],
-            enabled: t[:enabled] != false,
-            description: t[:description],
-            target_id: t[:target_id],
-            task_definition_name: t[:task_definition_name],
-            network_configuration: t[:network_configuration],
-            launch_type: t[:launch_type],
-            platform_version: t[:platform_version],
-            group: t[:group],
-            revision: t[:revision],
-            task_count: t[:task_count],
-            role_arn: t[:role_arn],
-            container_overrides: t[:container_overrides],
-          )
+          args = t.merge({region: region, cluster: t[:cluster] || fetch(:ecs_default_cluster)})
+          scheduled_task = EcsDeploy::ScheduledTask.new(**args)
           scheduled_task.deploy
         end
       end
@@ -96,27 +67,12 @@ namespace :ecs do
             next unless fetch(:target_task_definition).include?(service[:task_definition_name])
           end
 
-          service_options = {
+          service_options = service.merge({
             region: r,
             cluster: service[:cluster] || fetch(:ecs_default_cluster),
             service_name: service[:name],
-            task_definition_name: service[:task_definition_name],
-            load_balancers: service[:load_balancers],
-            desired_count: service[:desired_count],
-            launch_type: service[:launch_type],
-            network_configuration: service[:network_configuration],
-            health_check_grace_period_seconds: service[:health_check_grace_period_seconds],
-            delete: service[:delete],
-            enable_ecs_managed_tags: service[:enable_ecs_managed_tags],
-            tags: service[:tags],
-            propagate_tags: service[:propagate_tags],
-            enable_execute_command: service[:enable_execute_command],
-          }
-          service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
-          service_options[:placement_constraints] = service[:placement_constraints] if service[:placement_constraints]
-          service_options[:placement_strategy] = service[:placement_strategy] if service[:placement_strategy]
-          service_options[:capacity_provider_strategy] = service[:capacity_provider_strategy] if service[:capacity_provider_strategy]
-          service_options[:scheduling_strategy] = service[:scheduling_strategy] if service[:scheduling_strategy]
+          })
+
           s = EcsDeploy::Service.new(**service_options)
           s.deploy
           s
@@ -168,21 +124,12 @@ namespace :ecs do
 
           raise "Past task_definition_arns is empty" unless rollback_arn
 
-          service_options = {
+          service_options = service.merge({
             region: r,
             cluster: service[:cluster] || fetch(:ecs_default_cluster),
             service_name: service[:name],
             task_definition_name: rollback_arn,
-            load_balancers: service[:load_balancers],
-            desired_count: service[:desired_count],
-            launch_type: service[:launch_type],
-            network_configuration: service[:network_configuration],
-            health_check_grace_period_seconds: service[:health_check_grace_period_seconds],
-          }
-          service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
-          service_options[:placement_constraints] = service[:placement_constraints] if service[:placement_constraints]
-          service_options[:placement_strategy] = service[:placement_strategy] if service[:placement_strategy]
-          service_options[:capacity_provider_strategy] = service[:capacity_provider_strategy] if service[:capacity_provider_strategy]
+          })
           s = EcsDeploy::Service.new(**service_options)
           s.deploy
           EcsDeploy::TaskDefinition.deregister(current_task_definition_arn, region: r)
