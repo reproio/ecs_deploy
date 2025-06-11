@@ -210,6 +210,39 @@ module EcsDeploy
       end.each(&:join)
     end
 
+    def self.wait_all_deployment_successful(services)
+      services.group_by { |s| [s.cluster, s.region] }.flat_map do |(cl, region), ss|
+        params ||= EcsDeploy.config.ecs_client_params
+        client = Aws::ECS::Client.new(params.merge(region: region))
+        ss.reject(&:delete).map(&:service_name).each_slice(MAX_DESCRIBE_SERVICES).map do |chunked_service_names|
+          Thread.new do
+            EcsDeploy.config.ecs_wait_until_services_stable_max_attempts.times do
+              EcsDeploy.logger.info "waiting for deployments to be successful [#{chunked_service_names.join(", ")}] [#{cl}]"
+              resp = client.describe_services(cluster: cl, services: chunked_service_names)
+              resp.services.each do |s|
+                # Check if deployment is successful and running count matches desired count
+                if deployment_successful?(s)
+                  chunked_service_names.delete(s.service_name)
+                end
+                service = ss.detect {|sc| sc.service_name == s.service_name }
+                service.log_events(s)
+              end
+              break if chunked_service_names.empty?
+              sleep EcsDeploy.config.ecs_wait_until_services_stable_delay
+            end
+            raise TooManyAttemptsError unless chunked_service_names.empty?
+          end
+        end
+      end.each(&:join)
+    end
+
+    private_class_method def self.deployment_successful?(service)
+      # Check if there's exactly one deployment and it's successful
+      service.deployments.size == 1 && 
+      service.deployments.first.status == 'SUCCESSFUL' &&
+      service.running_count == service.desired_count
+    end
+
     private
 
     def task_definition_name_with_revision
