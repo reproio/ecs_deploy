@@ -9,42 +9,21 @@ module EcsDeploy
 
     attr_reader :cluster, :region, :service_name, :delete, :deploy_started_at
 
-    def initialize(
-      cluster:, service_name:, task_definition_name: nil, revision: nil,
-      load_balancers: nil,
-      desired_count: nil, deployment_configuration: {maximum_percent: 200, minimum_healthy_percent: 100},
-      launch_type: nil,
-      placement_constraints: [],
-      placement_strategy: [],
-      capacity_provider_strategy: nil,
-      network_configuration: nil,
-      health_check_grace_period_seconds: nil,
-      scheduling_strategy: 'REPLICA',
-      enable_ecs_managed_tags: nil,
-      tags: nil,
-      propagate_tags: nil,
-      region: nil,
-      delete: false,
-      enable_execute_command: false
-    )
+    # Immutable service properties that can only be set at creation time
+    CREATE_ONLY_KEYS = %i[launch_type scheduling_strategy].freeze
+
+    def initialize(cluster:, service_name:, region: nil, **options)
       @cluster = cluster
       @service_name = service_name
-      @task_definition_name = task_definition_name || service_name
-      @load_balancers = load_balancers
-      @desired_count = desired_count
-      @deployment_configuration = deployment_configuration
-      @launch_type = launch_type
-      @placement_constraints = placement_constraints
-      @placement_strategy = placement_strategy
-      @capacity_provider_strategy = capacity_provider_strategy
-      @network_configuration = network_configuration
-      @health_check_grace_period_seconds = health_check_grace_period_seconds
-      @scheduling_strategy = scheduling_strategy
-      @revision = revision
-      @enable_ecs_managed_tags = enable_ecs_managed_tags
-      @tags = tags
-      @propagate_tags = propagate_tags
-      @enable_execute_command = enable_execute_command
+      @options = options.dup
+      @task_definition_name = @options.delete(:task_definition_name) || service_name
+      @revision = @options.delete(:revision)
+      @delete = @options.delete(:delete) || false
+      @options[:deployment_configuration] ||= {maximum_percent: 200, minimum_healthy_percent: 100}
+      @options[:placement_constraints] ||= []
+      @options[:placement_strategy] ||= []
+      @options[:scheduling_strategy] ||= 'REPLICA'
+      @options[:enable_execute_command] ||= false
 
       @response = nil
 
@@ -52,8 +31,6 @@ module EcsDeploy
       params ||= EcsDeploy.config.ecs_client_params
       @client = region ? Aws::ECS::Client.new(params.merge(region: region)) : Aws::ECS::Client.new(params)
       @region = @client.config.region
-
-      @delete = delete
     end
 
     def current_task_definition_arn
@@ -64,75 +41,63 @@ module EcsDeploy
     def deploy
       @deploy_started_at = Time.now
       res = @client.describe_services(cluster: @cluster, services: [@service_name])
-      service_options = {
-        cluster: @cluster,
-        task_definition: task_definition_name_with_revision,
-        deployment_configuration: @deployment_configuration,
-        network_configuration: @network_configuration,
-        health_check_grace_period_seconds: @health_check_grace_period_seconds,
-        capacity_provider_strategy: @capacity_provider_strategy,
-        enable_execute_command: @enable_execute_command,
-        enable_ecs_managed_tags: @enable_ecs_managed_tags,
-        placement_constraints: @placement_constraints,
-        placement_strategy: @placement_strategy,
-      }
-
-      if @load_balancers && EcsDeploy.config.ecs_service_role
-        service_options.merge!({
-          role: EcsDeploy.config.ecs_service_role,
-        })
-      end
-
-      if @load_balancers
-        service_options.merge!({
-          load_balancers: @load_balancers,
-        })
-      end
 
       if res.services.select{ |s| s.status == 'ACTIVE' }.empty?
         return if @delete
-
-        service_options.merge!({
-          service_name: @service_name,
-          desired_count: @desired_count.to_i,
-          launch_type: @launch_type,
-          tags: @tags,
-          propagate_tags: @propagate_tags,
-        })
-
-        if @scheduling_strategy == 'DAEMON'
-          service_options[:scheduling_strategy] = @scheduling_strategy
-          service_options.delete(:desired_count)
-          service_options.delete(:placement_strategy)
-        end
-        @response = @client.create_service(service_options)
-        EcsDeploy.logger.info "created service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
+        create_service
       else
         return delete_service if @delete
-
-        service_options.merge!({service: @service_name})
-        service_options.merge!({desired_count: @desired_count}) if @desired_count
-        service_options.merge!({propagate_tags: @propagate_tags}) if @propagate_tags
-
-        current_service = res.services[0]
-        service_options.merge!({force_new_deployment: true}) if need_force_new_deployment?(current_service)
-
-        update_tags(@service_name, @tags)
-        if @scheduling_strategy == 'DAEMON'
-          service_options.delete(:placement_strategy)
-        end
-        @response = @client.update_service(service_options)
-        EcsDeploy.logger.info "updated service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
+        update_service(res.services[0])
       end
     end
 
+    private def create_service
+      service_options = @options.merge(
+        cluster: @cluster,
+        service_name: @service_name,
+        task_definition: task_definition_name_with_revision,
+      )
+      service_options[:desired_count] = service_options[:desired_count].to_i
+
+      if service_options[:load_balancers] && EcsDeploy.config.ecs_service_role
+        service_options[:role] = EcsDeploy.config.ecs_service_role
+      end
+
+      if service_options[:scheduling_strategy] == 'DAEMON'
+        service_options.delete(:desired_count)
+        service_options.delete(:placement_strategy)
+      end
+
+      @response = @client.create_service(service_options)
+      EcsDeploy.logger.info "created service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
+    end
+
+    private def update_service(current_service)
+      service_options = @options.except(*CREATE_ONLY_KEYS, :tags).merge(
+        cluster: @cluster,
+        service: @service_name,
+        task_definition: task_definition_name_with_revision,
+      )
+      service_options.delete(:desired_count) unless @options[:desired_count]
+      service_options.delete(:propagate_tags) unless @options[:propagate_tags]
+      service_options[:force_new_deployment] = true if need_force_new_deployment?(current_service)
+
+      update_tags(@service_name, @options[:tags])
+      if @options[:scheduling_strategy] == 'DAEMON'
+        service_options.delete(:placement_strategy)
+      end
+
+      @response = @client.update_service(service_options)
+      EcsDeploy.logger.info "updated service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
+    end
+
     private def need_force_new_deployment?(service)
-      return false unless @capacity_provider_strategy
+      return false unless @options[:capacity_provider_strategy]
       return true unless service.capacity_provider_strategy
 
-      return true if @capacity_provider_strategy.size != service.capacity_provider_strategy.size
+      return true if @options[:capacity_provider_strategy].size != service.capacity_provider_strategy.size
 
-      match_array = @capacity_provider_strategy.all? do |strategy|
+      match_array = @options[:capacity_provider_strategy].all? do |strategy|
         service.capacity_provider_strategy.find do |current_strategy|
           strategy[:capacity_provider] == current_strategy.capacity_provider &&
             strategy[:weight] == current_strategy.weight &&
@@ -144,7 +109,7 @@ module EcsDeploy
     end
 
     def delete_service
-      if @scheduling_strategy != 'DAEMON'
+      if @options[:scheduling_strategy] != 'DAEMON'
         @client.update_service(cluster: @cluster, service: @service_name, desired_count: 0)
         sleep 1
       end
