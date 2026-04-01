@@ -23,8 +23,14 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
       before do
         @auto_scaling_groups = [
           Aws::AutoScaling::Types::AutoScalingGroup.new(
+            auto_scaling_group_name: "asg-cluster",
             desired_capacity: 50,
-            max_size: 100
+            max_size: 100,
+            min_size: 0,
+            default_cooldown: 300,
+            availability_zones: ["ap-northeast-1a"],
+            health_check_type: "EC2",
+            created_time: Time.now,
           )
         ]
         Aws.config[:autoscaling] = {
@@ -35,21 +41,21 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
               )
             end,
             update_auto_scaling_group: lambda do |_|
-              # no error
-              nil
+              {}
             end
           }
         }
 
-        cluster = Aws::ECS::Types::Cluster.new(registered_container_instances_count: 50)
-        expect(cluster).to receive(:registered_container_instances_count)
-          .exactly(5).times.and_return(60, 70, 80, 90, 100)
-        @clusters = [cluster]
         Aws.config[:ecs] = {
           stub_responses: {
-            describe_clusters: lambda do |_|
-              Aws::ECS::Types::DescribeClustersResponse.new(clusters: @clusters)
-            end
+            describe_clusters: [
+              Aws::ECS::Types::DescribeClustersResponse.new(clusters: [Aws::ECS::Types::Cluster.new(registered_container_instances_count: 50)]),
+              Aws::ECS::Types::DescribeClustersResponse.new(clusters: [Aws::ECS::Types::Cluster.new(registered_container_instances_count: 60)]),
+              Aws::ECS::Types::DescribeClustersResponse.new(clusters: [Aws::ECS::Types::Cluster.new(registered_container_instances_count: 70)]),
+              Aws::ECS::Types::DescribeClustersResponse.new(clusters: [Aws::ECS::Types::Cluster.new(registered_container_instances_count: 80)]),
+              Aws::ECS::Types::DescribeClustersResponse.new(clusters: [Aws::ECS::Types::Cluster.new(registered_container_instances_count: 90)]),
+              Aws::ECS::Types::DescribeClustersResponse.new(clusters: [Aws::ECS::Types::Cluster.new(registered_container_instances_count: 100)]),
+            ]
           }
         }
 
@@ -74,8 +80,14 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
       before do
         @auto_scaling_groups = [
           Aws::AutoScaling::Types::AutoScalingGroup.new(
+            auto_scaling_group_name: "asg-cluster",
             desired_capacity: 100,
-            max_size: 100
+            max_size: 100,
+            min_size: 0,
+            default_cooldown: 300,
+            availability_zones: ["ap-northeast-1a"],
+            health_check_type: "EC2",
+            created_time: Time.now,
           )
         ]
         Aws.config[:autoscaling] = {
@@ -86,10 +98,10 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
               )
             end,
             update_auto_scaling_group: lambda do |_|
-              # no error
+              {}
             end,
             detach_instances: lambda do |_|
-              # no error
+              {}
             end
           }
         }
@@ -121,7 +133,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
               Aws::ECS::Types::DescribeContainerInstancesResponse.new(container_instances: container_instances)
             end,
             update_container_instances_state: lambda do |_|
-              # no error
+              {}
             end,
             list_tasks: lambda do |_|
               Aws::ECS::Types::ListTasksResponse.new(task_arns: task_arns)
@@ -130,7 +142,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
               Aws::ECS::Types::DescribeTasksResponse.new(tasks: tasks)
             end,
             stop_task: lambda do |_|
-              # no error
+              {}
             end
           }
         }
@@ -153,7 +165,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
         log = logdev.string
         expect(log).to include("Decreasing desired capacity of asg-cluster: 100 => 50")
         expect(log).to include("Succeeded in decreasing instances!")
-        instance_size_per_az = log.lines.grep(/AZ balance/).last.scan(/AZ balance: \{"zone-a"=>(\d+), "zone-b"=>(\d+)\}/).flatten.map(&:to_i)
+        instance_size_per_az = log.lines.grep(/AZ balance/).last.scan(/AZ balance: \{"zone-a"\s*=>\s*(\d+),\s*"zone-b"\s*=>\s*(\d+)\}/).flatten.map(&:to_i)
         expect(instance_size_per_az).to contain_exactly(25, 25)
       end
     end
@@ -162,8 +174,14 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
       before do
         @auto_scaling_groups = [
           Aws::AutoScaling::Types::AutoScalingGroup.new(
+            auto_scaling_group_name: "asg-cluster",
             desired_capacity: 100,
-            max_size: 100
+            max_size: 100,
+            min_size: 0,
+            default_cooldown: 300,
+            availability_zones: ["ap-northeast-1a"],
+            health_check_type: "EC2",
+            created_time: Time.now,
           )
         ]
         Aws.config[:autoscaling] = {
@@ -174,10 +192,10 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
               )
             end,
             update_auto_scaling_group: lambda do |_|
-              # no error
+              {}
             end,
             detach_instances: lambda do |_|
-              # no error
+              {}
             end
           }
         }
@@ -210,7 +228,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
               Aws::ECS::Types::DescribeContainerInstancesResponse.new(container_instances: container_instances)
             end,
             update_container_instances_state: lambda do |_|
-              # no error
+              {}
             end,
             list_tasks: lambda do |_|
               Aws::ECS::Types::ListTasksResponse.new(task_arns: task_arns)
@@ -219,7 +237,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
               Aws::ECS::Types::DescribeTasksResponse.new(tasks: tasks)
             end,
             stop_task: lambda do |_|
-              # no error
+              {}
             end
           }
         }
@@ -253,7 +271,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
           log = logdev.string
           expect(log).to include("Decreasing desired capacity of asg-cluster: 100 => 60")
           expect(log).to include("Succeeded in decreasing instances!")
-          instance_size_per_az = log.lines.grep(/AZ balance/).last.scan(/AZ balance: \{"zone-a"=>(\d+), "zone-b"=>(\d+), "zone-c"=>(\d+)\}/).flatten.map(&:to_i)
+          instance_size_per_az = log.lines.grep(/AZ balance/).last.scan(/AZ balance: \{"zone-a"\s*=>\s*(\d+),\s*"zone-b"\s*=>\s*(\d+),\s*"zone-c"\s*=>\s*(\d+)\}/).flatten.map(&:to_i)
           expect(instance_size_per_az).to contain_exactly(20, 20, 20)
         end
       end
@@ -274,7 +292,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
           log = logdev.string
           expect(log).to include("Decreasing desired capacity of asg-cluster: 100 => 53")
           expect(log).to include("Succeeded in decreasing instances!")
-          instance_size_per_az = log.lines.grep(/AZ balance/).last.scan(/AZ balance: \{"zone-a"=>(\d+), "zone-b"=>(\d+), "zone-c"=>(\d+)\}/).flatten.map(&:to_i)
+          instance_size_per_az = log.lines.grep(/AZ balance/).last.scan(/AZ balance: \{"zone-a"\s*=>\s*(\d+),\s*"zone-b"\s*=>\s*(\d+),\s*"zone-c"\s*=>\s*(\d+)\}/).flatten.map(&:to_i)
           expect(instance_size_per_az).to contain_exactly(17, 18, 18)
         end
       end
@@ -293,8 +311,14 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
       let(:auto_scaling_groups) do
         [
           Aws::AutoScaling::Types::AutoScalingGroup.new(
+            auto_scaling_group_name: "asg-cluster",
             desired_capacity: 1,
-            max_size: 5
+            max_size: 5,
+            min_size: 0,
+            default_cooldown: 300,
+            availability_zones: ["ap-northeast-1a"],
+            health_check_type: "EC2",
+            created_time: Time.now,
           )
         ]
       end
@@ -341,10 +365,10 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
               )
             end,
             update_auto_scaling_group: lambda do |_|
-              # no error
+              {}
             end,
             detach_instances: lambda do |_|
-              # no error
+              {}
             end
           }
         }
@@ -358,7 +382,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
               Aws::ECS::Types::DescribeContainerInstancesResponse.new(container_instances: container_instances)
             end,
             update_container_instances_state: lambda do |_|
-              # no error
+              {}
             end,
             list_tasks: lambda do |_|
               Aws::ECS::Types::ListTasksResponse.new(task_arns: task_arns)
@@ -367,7 +391,7 @@ RSpec.describe EcsDeploy::InstanceFluctuationManager do
               Aws::ECS::Types::DescribeTasksResponse.new(tasks: tasks)
             end,
             stop_task: lambda do |_|
-              # no error
+              {}
             end
           }
         }
