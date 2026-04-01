@@ -5,6 +5,7 @@ require "yaml"
 require "ecs_deploy/auto_scaler/auto_scaling_group_config"
 require "ecs_deploy/auto_scaler/instance_drainer"
 require "ecs_deploy/auto_scaler/service_config"
+require "ecs_deploy/auto_scaler/simple_scaling_config"
 require "ecs_deploy/auto_scaler/spot_fleet_request_config"
 
 module EcsDeploy
@@ -23,7 +24,7 @@ module EcsDeploy
         STDERR.sync = true unless error_log_file
         load_config(yaml_path)
 
-        ths = (auto_scaling_group_configs + spot_fleet_request_configs).map do |cluster_scaling_config|
+        ths = (auto_scaling_group_configs + spot_fleet_request_configs + simple_scaling_configs).map do |cluster_scaling_config|
           Thread.new(cluster_scaling_config, &method(:main_loop)).tap { |th| th.abort_on_exception = true }
         end
 
@@ -114,6 +115,16 @@ module EcsDeploy
             raise "Duplicate entry in spot_fleet_requests (id: #{c["id"]}, region: #{c["region"]})"
           end
           configs[c["id"]][c["region"]] = SpotFleetRequestConfig.new(c, @logger)
+        end.values.flat_map(&:values)
+      end
+
+      def simple_scaling_configs
+        @simple_scaling_configs ||= (@config["simple_scaling"] || []).each.with_object({}) do |c, configs|
+          configs[c["name"]] ||= {}
+          if configs[c["name"]][c["region"]]
+            raise "Duplicate entry in simple_scaling (name: #{c["name"]}, region: #{c["region"]})"
+          end
+          configs[c["name"]][c["region"]] = SimpleScalingConfig.new(c, @logger)
         end.values.flat_map(&:values)
       end
 
