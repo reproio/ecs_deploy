@@ -10,3 +10,5 @@
 
 .rspec_status
 .envrc
+
+.claude/settings.local.json
