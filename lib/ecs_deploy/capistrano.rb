@@ -11,6 +11,7 @@ namespace :ecs do
       c.ecs_wait_until_services_stable_max_attempts = fetch(:ecs_wait_until_services_stable_max_attempts) if fetch(:ecs_wait_until_services_stable_max_attempts)
       c.ecs_wait_until_services_stable_delay = fetch(:ecs_wait_until_services_stable_delay) if fetch(:ecs_wait_until_services_stable_delay)
       c.ecs_client_params = fetch(:ecs_client_params) if fetch(:ecs_client_params)
+      c.ecs_wait_for_deployment_success = fetch(:ecs_wait_for_deployment_success) if fetch(:ecs_wait_for_deployment_success)
     end
 
     if ENV["TARGET_CLUSTER"]
@@ -121,7 +122,11 @@ namespace :ecs do
           s.deploy
           s
         end
-        EcsDeploy::Service.wait_all_running(services)
+        if EcsDeploy.config.ecs_wait_for_deployment_success
+          EcsDeploy::Service.wait_all_deployment_successful(services)
+        else
+          EcsDeploy::Service.wait_all_running(services)
+        end
       end
     end
   end
@@ -188,7 +193,11 @@ namespace :ecs do
           EcsDeploy::TaskDefinition.deregister(current_task_definition_arn, region: r)
           s
         end
-        EcsDeploy::Service.wait_all_running(services)
+        if EcsDeploy.config.ecs_wait_for_deployment_success
+          EcsDeploy::Service.wait_all_deployment_successful(services)
+        else
+          EcsDeploy::Service.wait_all_running(services)
+        end
       end
     end
   end

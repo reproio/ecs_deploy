@@ -9,7 +9,8 @@ module EcsDeploy
       :ecs_service_role,
       :ecs_wait_until_services_stable_max_attempts,
       :ecs_wait_until_services_stable_delay,
-      :ecs_client_params
+      :ecs_client_params,
+      :ecs_wait_for_deployment_success
 
     def initialize
       @log_level = :info
@@ -18,6 +19,7 @@ module EcsDeploy
       @ecs_wait_until_services_stable_max_attempts = 40
       @ecs_wait_until_services_stable_delay = 15
       @ecs_client_params = {}
+      @ecs_wait_for_deployment_success = false
     end
   end
 end
