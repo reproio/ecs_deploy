@@ -31,9 +31,9 @@ RSpec.describe EcsDeploy::Service do
       }.not_to raise_error
     end
 
-    it "defaults update_strategy to :replace_options and wait_strategy to nil" do
+    it "defaults update_strategy and wait_strategy to nil" do
       svc = described_class.new(cluster: "c", service_name: "s")
-      expect(svc.update_strategy).to eq(:replace_options)
+      expect(svc.update_strategy).to be_nil
       expect(svc.wait_strategy).to be_nil
     end
   end
@@ -165,7 +165,7 @@ RSpec.describe EcsDeploy::Service do
       end
     end
 
-    context "with default update_strategy (:replace_options)" do
+    context "with default update_strategy (nil)" do
       it "still excludes CREATE_ONLY_KEYS (including deployment_controller) from update_service" do
         ecs_client.stub_responses(:list_tags_for_resource, tags: [])
 

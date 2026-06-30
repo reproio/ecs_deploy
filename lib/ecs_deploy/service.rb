@@ -13,7 +13,6 @@ module EcsDeploy
     # deployment_controller is rejected by update_service once the service exists.
     CREATE_ONLY_KEYS = %i[launch_type scheduling_strategy deployment_controller].freeze
 
-    VALID_UPDATE_STRATEGIES = %i[replace_options task_definition_only].freeze
     VALID_WAIT_STRATEGIES = %i[legacy none service_deployment].freeze
     ECS_NATIVE_BLUE_GREEN_STRATEGIES = %w[BLUE_GREEN LINEAR CANARY].freeze
 
@@ -24,10 +23,10 @@ module EcsDeploy
       @task_definition_name = @options.delete(:task_definition_name) || service_name
       @revision = @options.delete(:revision)
       @delete = @options.delete(:delete) || false
-      @update_strategy = @options.delete(:update_strategy) || :replace_options
+      @update_strategy = @options.delete(:update_strategy)
       @wait_strategy = @options.delete(:wait_strategy)
-      unless VALID_UPDATE_STRATEGIES.include?(@update_strategy)
-        raise ArgumentError, "Invalid update_strategy #{@update_strategy.inspect}, expected one of #{VALID_UPDATE_STRATEGIES.inspect}"
+      if @update_strategy && @update_strategy != :task_definition_only
+        raise ArgumentError, "Invalid update_strategy #{@update_strategy.inspect}, expected nil or :task_definition_only"
       end
       if @wait_strategy && !VALID_WAIT_STRATEGIES.include?(@wait_strategy)
         raise ArgumentError, "Invalid wait_strategy #{@wait_strategy.inspect}, expected nil or one of #{VALID_WAIT_STRATEGIES.inspect}"
@@ -86,8 +85,7 @@ module EcsDeploy
     end
 
     private def update_service(current_service)
-      case @update_strategy
-      when :task_definition_only
+      if @update_strategy == :task_definition_only
         update_task_definition_only(current_service)
       else
         update_service_full(current_service)
