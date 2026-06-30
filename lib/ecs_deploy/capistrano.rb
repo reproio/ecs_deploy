@@ -110,6 +110,58 @@ namespace :ecs do
     end
   end
 
+  desc "Describe in-flight ECS service deployments for services in :ecs_services"
+  task describe_deployment: [:configure] do
+    if fetch(:ecs_services)
+      regions = Array(fetch(:ecs_region))
+      regions = [EcsDeploy.config.default_region] if regions.empty?
+      EcsDeploy::ServiceDeployment.describe(
+        services: fetch(:ecs_services),
+        regions: regions,
+        default_cluster: fetch(:ecs_default_cluster),
+      )
+    end
+  end
+
+  desc "Continue an ECS service deployment paused at a lifecycle hook"
+  task :continue_deployment, [:hook_id] => [:configure] do |_t, args|
+    raise "hook_id is required: cap ... ecs:continue_deployment[hook_id]" unless args[:hook_id]
+    regions = Array(fetch(:ecs_region))
+    regions = [EcsDeploy.config.default_region] if regions.empty?
+    EcsDeploy::ServiceDeployment.invoke_lifecycle_hook(
+      hook_id: args[:hook_id],
+      action: "CONTINUE",
+      services: fetch(:ecs_services),
+      regions: regions,
+      default_cluster: fetch(:ecs_default_cluster),
+    )
+  end
+
+  desc "Roll back an ECS service deployment paused at a lifecycle hook"
+  task :rollback_deployment, [:hook_id] => [:configure] do |_t, args|
+    raise "hook_id is required: cap ... ecs:rollback_deployment[hook_id]" unless args[:hook_id]
+    regions = Array(fetch(:ecs_region))
+    regions = [EcsDeploy.config.default_region] if regions.empty?
+    EcsDeploy::ServiceDeployment.invoke_lifecycle_hook(
+      hook_id: args[:hook_id],
+      action: "ROLLBACK",
+      services: fetch(:ecs_services),
+      regions: regions,
+      default_cluster: fetch(:ecs_default_cluster),
+    )
+  end
+
+  desc "Stop an in-progress ECS service deployment (STOP_TYPE env: ABORT or ROLLBACK)"
+  task :stop_deployment, [:service_deployment_arn] => [:configure] do |_t, args|
+    raise "service_deployment_arn is required: cap ... ecs:stop_deployment[arn]" unless args[:service_deployment_arn]
+    region = Array(fetch(:ecs_region)).first || EcsDeploy.config.default_region
+    EcsDeploy::ServiceDeployment.stop(
+      service_deployment_arn: args[:service_deployment_arn],
+      region: region,
+      stop_type: ENV["STOP_TYPE"],
+    )
+  end
+
   task rollback: [:configure] do
     if fetch(:ecs_services)
       regions = Array(fetch(:ecs_region))
