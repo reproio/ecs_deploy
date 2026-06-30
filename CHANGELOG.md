@@ -1,6 +1,6 @@
 # v1.1
 
-## Unreleased
+## Release v1.1.0 - 2026/07/01
 
 ### New feature
 
