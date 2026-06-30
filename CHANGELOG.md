@@ -1,3 +1,11 @@
+# v1.1
+
+## Unreleased
+
+### Enhancement
+
+- Add `update_strategy: :task_definition_only` and `wait_strategy` options to `EcsDeploy::Service` for ECS-managed blue/green deployments (`DeploymentController.Type=ECS` with `BLUE_GREEN`/`LINEAR`/`CANARY`). `wait_all_running` now auto-detects ECS-managed deployments and skips polling so Capistrano sessions do not block on multi-day Pause Hooks.
+
 # v1.0
 
 ## Release v1.0.7 - 2024/08/08
