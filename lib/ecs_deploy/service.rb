@@ -7,10 +7,15 @@ module EcsDeploy
 
     class TooManyAttemptsError < StandardError; end
 
-    attr_reader :cluster, :region, :service_name, :delete, :deploy_started_at
+    attr_reader :cluster, :region, :service_name, :delete, :deploy_started_at, :update_strategy, :wait_strategy
 
-    # Immutable service properties that can only be set at creation time
-    CREATE_ONLY_KEYS = %i[launch_type scheduling_strategy].freeze
+    # Immutable service properties that can only be set at creation time.
+    # deployment_controller is rejected by update_service once the service exists.
+    CREATE_ONLY_KEYS = %i[launch_type scheduling_strategy deployment_controller].freeze
+
+    VALID_UPDATE_STRATEGIES = %i[replace_options task_definition_only].freeze
+    VALID_WAIT_STRATEGIES = %i[legacy none service_deployment].freeze
+    ECS_NATIVE_BLUE_GREEN_STRATEGIES = %w[BLUE_GREEN LINEAR CANARY].freeze
 
     def initialize(cluster:, service_name:, region: nil, **options)
       @cluster = cluster
@@ -19,6 +24,14 @@ module EcsDeploy
       @task_definition_name = @options.delete(:task_definition_name) || service_name
       @revision = @options.delete(:revision)
       @delete = @options.delete(:delete) || false
+      @update_strategy = @options.delete(:update_strategy) || :replace_options
+      @wait_strategy = @options.delete(:wait_strategy)
+      unless VALID_UPDATE_STRATEGIES.include?(@update_strategy)
+        raise ArgumentError, "Invalid update_strategy #{@update_strategy.inspect}, expected one of #{VALID_UPDATE_STRATEGIES.inspect}"
+      end
+      if @wait_strategy && !VALID_WAIT_STRATEGIES.include?(@wait_strategy)
+        raise ArgumentError, "Invalid wait_strategy #{@wait_strategy.inspect}, expected nil or one of #{VALID_WAIT_STRATEGIES.inspect}"
+      end
       @options[:deployment_configuration] ||= {maximum_percent: 200, minimum_healthy_percent: 100}
       @options[:placement_constraints] ||= []
       @options[:placement_strategy] ||= []
@@ -73,6 +86,15 @@ module EcsDeploy
     end
 
     private def update_service(current_service)
+      case @update_strategy
+      when :task_definition_only
+        update_task_definition_only(current_service)
+      else
+        update_service_full(current_service)
+      end
+    end
+
+    private def update_service_full(current_service)
       service_options = @options.except(*CREATE_ONLY_KEYS, :tags).merge(
         cluster: @cluster,
         service: @service_name,
@@ -86,6 +108,22 @@ module EcsDeploy
       if @options[:scheduling_strategy] == 'DAEMON'
         service_options.delete(:placement_strategy)
       end
+
+      @response = @client.update_service(service_options)
+      EcsDeploy.logger.info "updated service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
+    end
+
+    # ECS-managed blue/green deployments reject most update_service fields once
+    # the service exists; pass only what triggers a new deployment.
+    private def update_task_definition_only(current_service)
+      service_options = {
+        cluster: @cluster,
+        service: @service_name,
+        task_definition: task_definition_name_with_revision,
+      }
+      service_options[:force_new_deployment] = true if need_force_new_deployment?(current_service)
+
+      update_tags(@service_name, @options[:tags]) if @options.key?(:tags)
 
       @response = @client.update_service(service_options)
       EcsDeploy.logger.info "updated service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
@@ -149,30 +187,88 @@ module EcsDeploy
       end
     end
 
+    def skip_wait?
+      case @wait_strategy
+      when :none
+        true
+      when :legacy, :service_deployment
+        false
+      when nil
+        ecs_native_blue_green?
+      end
+    end
+
+    private def ecs_native_blue_green?
+      svc = @response&.service
+      return false unless svc&.deployment_controller&.type == "ECS"
+      strategy = svc.deployment_configuration&.strategy.to_s
+      ECS_NATIVE_BLUE_GREEN_STRATEGIES.include?(strategy)
+    end
+
     def self.wait_all_running(services)
-      services.group_by { |s| [s.cluster, s.region] }.flat_map do |(cl, region), ss|
-        params ||= EcsDeploy.config.ecs_client_params
+      threads = services.group_by { |s| [s.cluster, s.region] }.flat_map do |(cl, region), ss|
+        params = EcsDeploy.config.ecs_client_params
         client = Aws::ECS::Client.new(params.merge(region: region))
-        ss.reject(&:delete).map(&:service_name).each_slice(MAX_DESCRIBE_SERVICES).map do |chunked_service_names|
-          Thread.new do
-            EcsDeploy.config.ecs_wait_until_services_stable_max_attempts.times do
-              EcsDeploy.logger.info "waiting for services to stabilize [#{chunked_service_names.join(", ")}] [#{cl}]"
-              resp = client.describe_services(cluster: cl, services: chunked_service_names)
-              resp.services.each do |s|
-                # cf. https://github.com/aws/aws-sdk-ruby/blob/master/gems/aws-sdk-ecs/lib/aws-sdk-ecs/waiters.rb#L91-L96
-                if s.deployments.size == 1 && s.running_count == s.desired_count
-                  chunked_service_names.delete(s.service_name)
-                end
-                service = ss.detect {|sc| sc.service_name == s.service_name }
-                service.log_events(s)
-              end
-              break if chunked_service_names.empty?
-              sleep EcsDeploy.config.ecs_wait_until_services_stable_delay
-            end
-            raise TooManyAttemptsError unless chunked_service_names.empty?
+
+        targets = ss.reject(&:delete).reject do |s|
+          if s.skip_wait?
+            EcsDeploy.logger.info "skip waiting for service [#{s.service_name}] [#{cl}]: ECS-managed deployment, monitor via ecs:describe_deployment"
+            true
+          else
+            false
           end
         end
-      end.each(&:join)
+
+        legacy_targets = targets.reject { |s| s.wait_strategy == :service_deployment }
+        sd_targets = targets.select { |s| s.wait_strategy == :service_deployment }
+
+        legacy_threads(client, cl, ss, legacy_targets) + service_deployment_threads(client, cl, sd_targets)
+      end
+      threads.each(&:join)
+    end
+
+    def self.legacy_threads(client, cluster, all_services, targets)
+      targets.map(&:service_name).each_slice(MAX_DESCRIBE_SERVICES).map do |chunked_service_names|
+        Thread.new do
+          EcsDeploy.config.ecs_wait_until_services_stable_max_attempts.times do
+            EcsDeploy.logger.info "waiting for services to stabilize [#{chunked_service_names.join(", ")}] [#{cluster}]"
+            resp = client.describe_services(cluster: cluster, services: chunked_service_names)
+            resp.services.each do |s|
+              # cf. https://github.com/aws/aws-sdk-ruby/blob/master/gems/aws-sdk-ecs/lib/aws-sdk-ecs/waiters.rb#L91-L96
+              if s.deployments.size == 1 && s.running_count == s.desired_count
+                chunked_service_names.delete(s.service_name)
+              end
+              service = all_services.detect { |sc| sc.service_name == s.service_name }
+              service&.log_events(s)
+            end
+            break if chunked_service_names.empty?
+            sleep EcsDeploy.config.ecs_wait_until_services_stable_delay
+          end
+          raise TooManyAttemptsError unless chunked_service_names.empty?
+        end
+      end
+    end
+
+    def self.service_deployment_threads(client, cluster, targets)
+      targets.map do |service|
+        Thread.new do
+          pending = true
+          EcsDeploy.config.ecs_wait_until_services_stable_max_attempts.times do
+            EcsDeploy.logger.info "waiting for service deployment to settle [#{service.service_name}] [#{cluster}]"
+            arns = client.list_service_deployments(
+              cluster: cluster,
+              service: service.service_name,
+              status: %w[IN_PROGRESS PENDING],
+            ).service_deployments.map(&:service_deployment_arn)
+            if arns.empty?
+              pending = false
+              break
+            end
+            sleep EcsDeploy.config.ecs_wait_until_services_stable_delay
+          end
+          raise TooManyAttemptsError if pending
+        end
+      end
     end
 
     private
