@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Breaking change
+
+- `ecs:deploy` capistrano task now passes the entire service hash through to `EcsDeploy::Service.new` instead of forwarding an explicit allow-list of keys. New SDK fields (e.g. `deployment_controller`, `platform_version`, `service_connect_configuration`, `volume_configurations`, `availability_zone_rebalancing`, `load_balancers[].advanced_configuration`) are supported automatically without gem updates. Any custom non-SDK keys previously placed in `set :ecs_services` entries will now reach the SDK and may cause errors — remove or rename them.
+
 ### Enhancement
 
 - Add `update_strategy: :task_definition_only` and `wait_strategy` options to `EcsDeploy::Service` for ECS-managed blue/green deployments (`DeploymentController.Type=ECS` with `BLUE_GREEN`/`LINEAR`/`CANARY`). `wait_all_running` now auto-detects ECS-managed deployments and skips polling so Capistrano sessions do not block on multi-day Pause Hooks.
