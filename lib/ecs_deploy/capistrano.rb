@@ -96,31 +96,15 @@ namespace :ecs do
             next unless fetch(:target_task_definition).include?(service[:task_definition_name])
           end
 
-          service_options = {
-            region: r,
-            cluster: service[:cluster] || fetch(:ecs_default_cluster),
-            service_name: service[:name],
-            task_definition_name: service[:task_definition_name],
-            load_balancers: service[:load_balancers],
-            desired_count: service[:desired_count],
-            launch_type: service[:launch_type],
-            network_configuration: service[:network_configuration],
-            health_check_grace_period_seconds: service[:health_check_grace_period_seconds],
-            delete: service[:delete],
-            enable_ecs_managed_tags: service[:enable_ecs_managed_tags],
-            tags: service[:tags],
-            propagate_tags: service[:propagate_tags],
-            enable_execute_command: service[:enable_execute_command],
-          }
-          service_options[:deployment_configuration] = service[:deployment_configuration] if service[:deployment_configuration]
-          service_options[:placement_constraints] = service[:placement_constraints] if service[:placement_constraints]
-          service_options[:placement_strategy] = service[:placement_strategy] if service[:placement_strategy]
-          service_options[:capacity_provider_strategy] = service[:capacity_provider_strategy] if service[:capacity_provider_strategy]
-          service_options[:scheduling_strategy] = service[:scheduling_strategy] if service[:scheduling_strategy]
+          service_options = service.dup
+          service_options[:service_name] = service_options.delete(:name) if service_options.key?(:name)
+          service_options[:cluster] ||= fetch(:ecs_default_cluster)
+          service_options[:region] = r
+
           s = EcsDeploy::Service.new(**service_options)
           s.deploy
           s
-        end
+        end.compact
         EcsDeploy::Service.wait_all_running(services)
       end
     end
