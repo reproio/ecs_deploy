@@ -186,6 +186,75 @@ And rollback
 | 6        | myapp:15 | myapp-service | deregister |
 | 7        | myapp:12 | myapp-service | current    |
 
+## Native Blue/Green Deployment (ECS-managed)
+
+`ecs_deploy` supports ECS-managed blue/green deployments where ECS itself drives the rollout (no CodeDeploy required). Set `deployment_controller`, `deployment_configuration`, lifecycle hooks, and `load_balancers[].advanced_configuration` directly on the service entry. The Capistrano `ecs:deploy` task forwards the entire hash through to `EcsDeploy::Service.new` and then to `Aws::ECS::Client#create_service` / `#update_service`, so any new SDK field is supported automatically.
+
+```ruby
+set :ecs_services, [
+  {
+    name: "myapp-#{fetch(:rails_env)}",
+    cluster: "myapp-cluster",
+    task_definition_name: "myapp-#{fetch(:rails_env)}",
+    launch_type: "FARGATE",
+    platform_version: "LATEST",
+    desired_count: 1,
+    network_configuration: { awsvpc_configuration: { subnets: %w[subnet-...], security_groups: %w[sg-...], assign_public_ip: "DISABLED" } },
+    deployment_controller: { type: "ECS" },
+    deployment_configuration: {
+      strategy: "LINEAR",
+      linear_configuration: { step_percent: 50.0, step_bake_time_in_minutes: 60 },
+      bake_time_in_minutes: 5,
+      deployment_circuit_breaker: { enable: true, rollback: true },
+      lifecycle_hooks: [
+        {
+          hook_target_arn: "arn:aws:lambda:ap-northeast-1:<account-id>:function:my-pause-hook",
+          role_arn: "arn:aws:iam::<account-id>:role/ecsLifecycleHookRole",
+          lifecycle_stages: ["POST_TEST_TRAFFIC_SHIFT"],
+        },
+      ],
+    },
+    load_balancers: [{
+      target_group_arn: "arn:aws:elasticloadbalancing:...:targetgroup/blue/...",
+      container_name: "app",
+      container_port: 8080,
+      advanced_configuration: {
+        alternate_target_group_arn: "arn:aws:elasticloadbalancing:...:targetgroup/green/...",
+        production_listener_rule: "arn:aws:elasticloadbalancing:...:listener-rule/...", # for NLB, pass the Listener ARN directly
+        test_listener_rule: "arn:aws:elasticloadbalancing:...:listener-rule/...",
+        role_arn: "arn:aws:iam::<account-id>:role/ecsInfrastructureRole",
+      },
+    }],
+    health_check_grace_period_seconds: 300,
+
+    # gem-internal options (not sent to the SDK):
+    update_strategy: :task_definition_only, # send only cluster/service/task_definition on update; required for ECS-managed deployments
+    wait_strategy: :none, # default for ECS-managed deployments is auto-detected as :none
+  },
+]
+```
+
+| option | values | purpose |
+|--------|--------|---------|
+| `update_strategy:` | `nil` (default), `:task_definition_only` | For ECS-managed blue/green, set `:task_definition_only` so `update_service` only ships `cluster`, `service`, `task_definition`. Leaving it unset keeps the legacy behavior of sending `@options.except(*CREATE_ONLY_KEYS, :tags)`. The full hash is still used on `create_service` in either mode. |
+| `wait_strategy:` | `nil` (auto), `:legacy`, `:none`, `:service_deployment` | `nil` auto-detects ECS-managed deployments and skips waiting (multi-day Pause Hooks make blocking impractical). `:legacy` matches pre-1.1 behavior. `:service_deployment` polls `list_service_deployments` (not recommended for sessions). |
+
+### Operational tasks
+
+```sh
+bundle exec cap <stage> ecs:describe_deployment              # list in-flight deployments with lifecycle hook details
+bundle exec cap <stage> ecs:continue_deployment[hook-id]     # approve a paused lifecycle hook
+bundle exec cap <stage> ecs:rollback_deployment[hook-id]     # reject a paused lifecycle hook (ECS rolls back)
+bundle exec cap <stage> ecs:stop_deployment[arn]             # stop an in-progress deployment; STOP_TYPE=ABORT or ROLLBACK
+```
+
+### Caveats
+
+- `deployment_controller` is immutable on an existing service. To switch an existing `CODE_DEPLOY` service to `ECS`, delete and re-create the service.
+- The PAUSE lifecycle hook stages `TEST_TRAFFIC_SHIFT` and `PRODUCTION_TRAFFIC_SHIFT` are rejected by AWS (those stages are also entered during rollback). Use `PRE_*`/`POST_*` variants instead.
+- For NLB, `advanced_configuration.production_listener_rule` should hold the Listener ARN directly (NLBs do not have Listener Rules).
+- Pre-1.1 versions filtered the `set :ecs_services` hash to an allow-list of keys before calling `EcsDeploy::Service.new`. Starting with 1.1, the entire hash is forwarded. Any custom non-SDK keys previously placed there must be removed or renamed; otherwise the SDK will raise.
+
 ## Autoscaler
 
 The autoscaler of `ecs_deploy` supports auto scaling of ECS services and clusters.
