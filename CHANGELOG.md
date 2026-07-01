@@ -12,7 +12,8 @@
 
 ### Enhancement
 
-- Add `update_strategy: :task_definition_only` and `wait_strategy` options to `EcsDeploy::Service` for ECS-managed blue/green deployments (`DeploymentController.Type=ECS` with `BLUE_GREEN`/`LINEAR`/`CANARY`). `wait_all_running` now auto-detects ECS-managed deployments and skips polling so Capistrano sessions do not block on multi-day Pause Hooks.
+- Add `wait_strategy` option to `EcsDeploy::Service` for ECS-managed blue/green deployments (`DeploymentController.Type=ECS` with `BLUE_GREEN`/`LINEAR`/`CANARY`). `wait_all_running` now auto-detects ECS-managed deployments and skips polling so Capistrano sessions do not block on multi-day Pause Hooks.
+- `EcsDeploy::Service#update_service` now forwards every field accepted by `Aws::ECS::Client#update_service` (aws-sdk-ecs 1.238+), including fields added after this gem release. Options that ECS cannot apply on an existing service (`launch_type`, `scheduling_strategy`, `role`, `client_token`, `deployment_controller`) are detected and logged as warnings when the user's value differs from the current service. `desired_count: 0` and `propagate_tags: "NONE"` are now honored (previously silently dropped by a truthiness check).
 - Bump minimum `aws-sdk-ecs` to `1.238` for `continue_service_deployment`, `stop_service_deployment`, `LINEAR`/`CANARY` strategy, `lifecycle_hooks`, and `LoadBalancer.advanced_configuration`.
 
 # v1.0
