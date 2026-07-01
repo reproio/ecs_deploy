@@ -24,12 +24,6 @@ RSpec.describe EcsDeploy::Service do
       svc = described_class.new(cluster: "c", service_name: "s")
       expect(svc.wait_strategy).to be_nil
     end
-
-    it "silently ignores the removed :update_strategy option" do
-      expect {
-        described_class.new(cluster: "c", service_name: "s", update_strategy: :task_definition_only)
-      }.not_to raise_error
-    end
   end
 
   describe "#deploy on a non-existent service" do

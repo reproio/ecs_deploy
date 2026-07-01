@@ -27,13 +27,10 @@ module EcsDeploy
       @task_definition_name = @options.delete(:task_definition_name) || service_name
       @revision = @options.delete(:revision)
       @delete = @options.delete(:delete) || false
-      # :update_strategy was briefly available in 1.1.0.beta1 and has been removed.
-      # Silently drop the key so old configs keep working.
-      @options.delete(:update_strategy)
       @wait_strategy = @options.delete(:wait_strategy)
       # Snapshot the keys the user actually passed in, so warnings only fire on
       # options the caller explicitly set (not on defaults injected below).
-      @user_provided_keys = (options.keys - %i[task_definition_name revision delete update_strategy wait_strategy]).freeze
+      @user_provided_keys = (options.keys - %i[task_definition_name revision delete wait_strategy]).freeze
       if @wait_strategy && !VALID_WAIT_STRATEGIES.include?(@wait_strategy)
         raise ArgumentError, "Invalid wait_strategy #{@wait_strategy.inspect}, expected nil or one of #{VALID_WAIT_STRATEGIES.inspect}"
       end
