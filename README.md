@@ -236,7 +236,7 @@ set :ecs_services, [
 
 | option | values | purpose |
 |--------|--------|---------|
-| `update_strategy:` | `:replace_options` (default), `:task_definition_only` | For ECS-managed blue/green, set `:task_definition_only` so `update_service` only ships `cluster`, `service`, `task_definition`. The full hash is still used on `create_service`. |
+| `update_strategy:` | `nil` (default), `:task_definition_only` | For ECS-managed blue/green, set `:task_definition_only` so `update_service` only ships `cluster`, `service`, `task_definition`. Leaving it unset keeps the legacy behavior of sending `@options.except(*CREATE_ONLY_KEYS, :tags)`. The full hash is still used on `create_service` in either mode. |
 | `wait_strategy:` | `nil` (auto), `:legacy`, `:none`, `:service_deployment` | `nil` auto-detects ECS-managed deployments and skips waiting (multi-day Pause Hooks make blocking impractical). `:legacy` matches pre-1.1 behavior. `:service_deployment` polls `list_service_deployments` (not recommended for sessions). |
 
 ### Operational tasks
