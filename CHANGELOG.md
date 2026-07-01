@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### New feature
+
+- Add `ecs:describe_deployment`, `ecs:continue_deployment[hook_id]`, `ecs:rollback_deployment[hook_id]`, `ecs:stop_deployment[service_deployment_arn]` capistrano tasks for operating ECS-managed blue/green deployments (lifecycle hook approval / rollback / abort).
+
 ### Breaking change
 
 - `ecs:deploy` capistrano task now passes the entire service hash through to `EcsDeploy::Service.new` instead of forwarding an explicit allow-list of keys. New SDK fields (e.g. `deployment_controller`, `platform_version`, `service_connect_configuration`, `volume_configurations`, `availability_zone_rebalancing`, `load_balancers[].advanced_configuration`) are supported automatically without gem updates. Any custom non-SDK keys previously placed in `set :ecs_services` entries will now reach the SDK and may cause errors — remove or rename them.
@@ -9,6 +13,7 @@
 ### Enhancement
 
 - Add `update_strategy: :task_definition_only` and `wait_strategy` options to `EcsDeploy::Service` for ECS-managed blue/green deployments (`DeploymentController.Type=ECS` with `BLUE_GREEN`/`LINEAR`/`CANARY`). `wait_all_running` now auto-detects ECS-managed deployments and skips polling so Capistrano sessions do not block on multi-day Pause Hooks.
+- Bump minimum `aws-sdk-ecs` to `1.238` for `continue_service_deployment`, `stop_service_deployment`, `LINEAR`/`CANARY` strategy, `lifecycle_hooks`, and `LoadBalancer.advanced_configuration`.
 
 # v1.0
 
