@@ -7,11 +7,15 @@ module EcsDeploy
 
     class TooManyAttemptsError < StandardError; end
 
-    attr_reader :cluster, :region, :service_name, :delete, :deploy_started_at, :update_strategy, :wait_strategy
+    attr_reader :cluster, :region, :service_name, :delete, :deploy_started_at, :wait_strategy
 
-    # Immutable service properties that can only be set at creation time.
-    # deployment_controller is rejected by update_service once the service exists.
-    CREATE_ONLY_KEYS = %i[launch_type scheduling_strategy deployment_controller].freeze
+    # Options that Aws::ECS::Client#update_service will not honor on an existing
+    # service:
+    # - launch_type / scheduling_strategy: not in update_service's parameter list
+    # - role / client_token: create-only, no update-side equivalent
+    # - deployment_controller: accepted by update_service in aws-sdk-ecs 1.238+
+    #   but AWS rejects any change to the controller type at runtime
+    CREATE_ONLY_KEYS = %i[launch_type scheduling_strategy role client_token deployment_controller].freeze
 
     VALID_WAIT_STRATEGIES = %i[legacy none service_deployment].freeze
     ECS_NATIVE_BLUE_GREEN_STRATEGIES = %w[BLUE_GREEN LINEAR CANARY].freeze
@@ -23,11 +27,13 @@ module EcsDeploy
       @task_definition_name = @options.delete(:task_definition_name) || service_name
       @revision = @options.delete(:revision)
       @delete = @options.delete(:delete) || false
-      @update_strategy = @options.delete(:update_strategy)
+      # :update_strategy was briefly available in 1.1.0.beta1 and has been removed.
+      # Silently drop the key so old configs keep working.
+      @options.delete(:update_strategy)
       @wait_strategy = @options.delete(:wait_strategy)
-      if @update_strategy && @update_strategy != :task_definition_only
-        raise ArgumentError, "Invalid update_strategy #{@update_strategy.inspect}, expected nil or :task_definition_only"
-      end
+      # Snapshot the keys the user actually passed in, so warnings only fire on
+      # options the caller explicitly set (not on defaults injected below).
+      @user_provided_keys = (options.keys - %i[task_definition_name revision delete update_strategy wait_strategy]).freeze
       if @wait_strategy && !VALID_WAIT_STRATEGIES.include?(@wait_strategy)
         raise ArgumentError, "Invalid wait_strategy #{@wait_strategy.inspect}, expected nil or one of #{VALID_WAIT_STRATEGIES.inspect}"
       end
@@ -85,46 +91,59 @@ module EcsDeploy
     end
 
     private def update_service(current_service)
-      if @update_strategy == :task_definition_only
-        update_task_definition_only(current_service)
-      else
-        update_service_full(current_service)
-      end
-    end
+      warn_on_ignored_options(current_service)
 
-    private def update_service_full(current_service)
       service_options = @options.except(*CREATE_ONLY_KEYS, :tags).merge(
         cluster: @cluster,
         service: @service_name,
         task_definition: task_definition_name_with_revision,
       )
-      service_options.delete(:desired_count) unless @options[:desired_count]
-      service_options.delete(:propagate_tags) unless @options[:propagate_tags]
+      # If the user did not set these explicitly, leave them out so ECS keeps
+      # its current values (desired_count is often managed by autoscaling;
+      # propagate_tags reflects an existing policy).
+      service_options.delete(:desired_count)  unless @options.key?(:desired_count)
+      service_options.delete(:propagate_tags) unless @options.key?(:propagate_tags)
       service_options[:force_new_deployment] = true if need_force_new_deployment?(current_service)
+      service_options.delete(:placement_strategy) if @options[:scheduling_strategy] == 'DAEMON'
 
       update_tags(@service_name, @options[:tags])
-      if @options[:scheduling_strategy] == 'DAEMON'
-        service_options.delete(:placement_strategy)
-      end
 
       @response = @client.update_service(service_options)
       EcsDeploy.logger.info "updated service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
     end
 
-    # ECS-managed blue/green deployments reject most update_service fields once
-    # the service exists; pass only what triggers a new deployment.
-    private def update_task_definition_only(current_service)
-      service_options = {
-        cluster: @cluster,
-        service: @service_name,
-        task_definition: task_definition_name_with_revision,
-      }
-      service_options[:force_new_deployment] = true if need_force_new_deployment?(current_service)
+    # Log a warning for user-supplied options that update_service cannot apply.
+    # Silently drop keys whose value matches the current service (harmless
+    # re-declaration of the current state); warn only when the user's value
+    # would actually change something.
+    private def warn_on_ignored_options(current_service)
+      CREATE_ONLY_KEYS.each do |key|
+        next unless @user_provided_keys.include?(key)
+        next if create_only_matches_current?(key, current_service)
+        EcsDeploy.logger.warn "[#{@service_name}] option #{key.inspect} cannot be applied by update_service (current: #{create_only_current_display(current_service, key).inspect}, requested: #{@options[key].inspect}), skipping"
+      end
+    end
 
-      update_tags(@service_name, @options[:tags]) if @options.key?(:tags)
+    private def create_only_matches_current?(key, current_service)
+      case key
+      when :launch_type
+        @options[key].to_s == current_service.launch_type.to_s
+      when :scheduling_strategy
+        @options[key].to_s == current_service.scheduling_strategy.to_s
+      when :deployment_controller
+        Hash(@options[key])[:type].to_s == current_service.deployment_controller&.type.to_s
+      else
+        # role / client_token have no meaningful "current" comparison; always warn.
+        false
+      end
+    end
 
-      @response = @client.update_service(service_options)
-      EcsDeploy.logger.info "updated service [#{@service_name}] [#{@cluster}] [#{@region}] [#{Paint['OK', :green]}]"
+    private def create_only_current_display(current_service, key)
+      case key
+      when :launch_type          then current_service.launch_type
+      when :scheduling_strategy  then current_service.scheduling_strategy
+      when :deployment_controller then current_service.deployment_controller&.type
+      end
     end
 
     private def need_force_new_deployment?(service)

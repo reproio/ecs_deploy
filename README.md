@@ -190,6 +190,8 @@ And rollback
 
 `ecs_deploy` supports ECS-managed blue/green deployments where ECS itself drives the rollout (no CodeDeploy required). Set `deployment_controller`, `deployment_configuration`, lifecycle hooks, and `load_balancers[].advanced_configuration` directly on the service entry. The Capistrano `ecs:deploy` task forwards the entire hash through to `EcsDeploy::Service.new` and then to `Aws::ECS::Client#create_service` / `#update_service`, so any new SDK field is supported automatically.
 
+When updating an existing service, `EcsDeploy::Service` forwards every field accepted by `Aws::ECS::Client#update_service`, including `deployment_configuration` and `load_balancers[].advanced_configuration`. Options that ECS treats as create-only (`launch_type`, `scheduling_strategy`, `role`, `client_token`, `deployment_controller`) are skipped and, if their value differs from the current service, logged as a warning. Unknown keys are forwarded verbatim and will surface as SDK errors — this is intentional so new SDK fields work without gem updates.
+
 ```ruby
 set :ecs_services, [
   {
@@ -227,8 +229,7 @@ set :ecs_services, [
     }],
     health_check_grace_period_seconds: 300,
 
-    # gem-internal options (not sent to the SDK):
-    update_strategy: :task_definition_only, # send only cluster/service/task_definition on update; required for ECS-managed deployments
+    # gem-internal option (not sent to the SDK):
     wait_strategy: :none, # default for ECS-managed deployments is auto-detected as :none
   },
 ]
@@ -236,7 +237,6 @@ set :ecs_services, [
 
 | option | values | purpose |
 |--------|--------|---------|
-| `update_strategy:` | `nil` (default), `:task_definition_only` | For ECS-managed blue/green, set `:task_definition_only` so `update_service` only ships `cluster`, `service`, `task_definition`. Leaving it unset keeps the legacy behavior of sending `@options.except(*CREATE_ONLY_KEYS, :tags)`. The full hash is still used on `create_service` in either mode. |
 | `wait_strategy:` | `nil` (auto), `:legacy`, `:none`, `:service_deployment` | `nil` auto-detects ECS-managed deployments and skips waiting (multi-day Pause Hooks make blocking impractical). `:legacy` matches pre-1.1 behavior. `:service_deployment` polls `list_service_deployments` (not recommended for sessions). |
 
 ### Operational tasks
