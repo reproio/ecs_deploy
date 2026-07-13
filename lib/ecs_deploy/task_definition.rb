@@ -1,5 +1,18 @@
+require "open3"
+
 module EcsDeploy
   class TaskDefinition
+    DIGEST_SUFFIX = /@sha256:[0-9a-f]{64}\z/
+    DIGEST_FORMAT = /\Asha256:[0-9a-f]{64}\z/
+
+    # Process-wide cache of resolved digests keyed by image reference,
+    # so the same image is only inspected via docker once per process.
+    @digest_cache = {}
+
+    class << self
+      attr_reader :digest_cache
+    end
+
     def self.deregister(arn, region: nil)
       region ||= EcsDeploy.config.default_region
       params ||= EcsDeploy.config.ecs_client_params
@@ -10,8 +23,12 @@ module EcsDeploy
       EcsDeploy.logger.info "deregistered task definition [#{arn}] [#{client.config.region}] [#{Paint['OK', :green]}]"
     end
 
-    def initialize(task_definition_name:, region: nil, **options)
+    def initialize(task_definition_name:, region: nil, use_digest: false, docker_buildx_env: nil, **options)
       @task_definition_name = task_definition_name
+      @use_digest = use_digest
+      @docker_buildx_env = (EcsDeploy.config.docker_buildx_env || {})
+        .merge(docker_buildx_env || {})
+        .map { |k, v| [k.to_s, v&.to_s] }.to_h
       region ||= EcsDeploy.config.default_region
       params ||= EcsDeploy.config.ecs_client_params
 
@@ -49,11 +66,61 @@ module EcsDeploy
     end
 
     def register
-      res = @client.register_task_definition(
-        @options.merge(family: @task_definition_name)
-      )
+      options = @options.merge(family: @task_definition_name)
+      options[:container_definitions] = apply_digests(options[:container_definitions]) if @use_digest
+      res = @client.register_task_definition(options)
       EcsDeploy.logger.info "registered task definition [#{@task_definition_name}] [#{@region}] [#{Paint['OK', :green]}]"
       res.task_definition
+    end
+
+    private
+
+    def apply_digests(container_definitions)
+      (container_definitions || []).map do |cd|
+        image = cd[:image]
+        next cd if image.nil? || image.empty?
+
+        resolved = resolve_image_with_digest(image)
+        EcsDeploy.logger.info "resolved image [#{image}] -> [#{resolved}]" if resolved != image
+        cd.merge(image: resolved)
+      end
+    end
+
+    def resolve_image_with_digest(image)
+      return image if image =~ DIGEST_SUFFIX
+
+      "#{repository_without_tag(image)}@#{fetch_manifest_digest(image)}"
+    end
+
+    # "registry:5000/ns/repo:tag" -> "registry:5000/ns/repo"
+    # "registry:5000/ns/repo"     -> "registry:5000/ns/repo"
+    # "repo:tag"                  -> "repo"
+    def repository_without_tag(image)
+      name_start = (idx = image.rindex("/")) ? idx + 1 : 0
+      colon = image.index(":", name_start)
+      colon ? image[0...colon] : image
+    end
+
+    def fetch_manifest_digest(image)
+      cache = self.class.digest_cache
+      if (cached = cache[image])
+        EcsDeploy.logger.debug "using cached digest for #{image}: #{cached}"
+        return cached
+      end
+
+      EcsDeploy.logger.debug "docker buildx imagetools inspect --format '{{.Manifest.Digest}}' #{image}"
+      stdout, stderr, status =
+        Open3.capture3(@docker_buildx_env, "docker", "buildx", "imagetools", "inspect", "--format", "{{.Manifest.Digest}}", image)
+      unless status.success?
+        raise EcsDeploy::Error, "docker buildx imagetools inspect failed for '#{image}': #{stderr.strip}"
+      end
+      digest = stdout.strip
+      unless digest =~ DIGEST_FORMAT
+        raise EcsDeploy::Error, "Unexpected digest for '#{image}': #{digest.inspect}"
+      end
+      cache[image] = digest
+    rescue Errno::ENOENT => e
+      raise EcsDeploy::Error, "docker command not found: #{e.message}"
     end
   end
 end

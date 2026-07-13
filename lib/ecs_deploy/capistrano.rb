@@ -11,6 +11,7 @@ namespace :ecs do
       c.ecs_wait_until_services_stable_max_attempts = fetch(:ecs_wait_until_services_stable_max_attempts) if fetch(:ecs_wait_until_services_stable_max_attempts)
       c.ecs_wait_until_services_stable_delay = fetch(:ecs_wait_until_services_stable_delay) if fetch(:ecs_wait_until_services_stable_delay)
       c.ecs_client_params = fetch(:ecs_client_params) if fetch(:ecs_client_params)
+      c.docker_buildx_env = fetch(:ecs_docker_buildx_env) if fetch(:ecs_docker_buildx_env)
     end
 
     if ENV["TARGET_CLUSTER"]
@@ -32,6 +33,8 @@ namespace :ecs do
           task_definition = EcsDeploy::TaskDefinition.new(
             region: region,
             task_definition_name: t[:name],
+            use_digest: t[:use_digest],
+            docker_buildx_env: t[:docker_buildx_env],
             container_definitions: t[:container_definitions],
             task_role_arn: t[:task_role_arn],
             execution_role_arn: t[:execution_role_arn],

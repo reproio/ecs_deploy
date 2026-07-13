@@ -7,6 +7,8 @@ require 'terminal-table'
 require 'paint'
 
 module EcsDeploy
+  class Error < StandardError; end
+
   def self.logger
     @logger ||= Logger.new(STDOUT).tap do |l|
       l.level = Logger.const_get(config.log_level.to_s.upcase)
