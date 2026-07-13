@@ -34,6 +34,7 @@ set :ecs_client_params, { retry_mode: "standard", max_attempts: 10 } # default: 
 set :ecs_tasks, [
   {
     name: "myapp-#{fetch(:rails_env)}",
+    use_digest: true, # optional. When true, each container_definitions[].image is rewritten to a digest reference (registry/repo@sha256:...) resolved via `docker buildx imagetools inspect` at registration time. Requires the `docker` CLI with buildx on the deploy host; resolution failure aborts the deploy.
     container_definitions: [
       {
         name: "myapp",

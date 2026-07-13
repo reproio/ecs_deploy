@@ -32,6 +32,7 @@ namespace :ecs do
           task_definition = EcsDeploy::TaskDefinition.new(
             region: region,
             task_definition_name: t[:name],
+            use_digest: t[:use_digest],
             container_definitions: t[:container_definitions],
             task_role_arn: t[:task_role_arn],
             execution_role_arn: t[:execution_role_arn],
