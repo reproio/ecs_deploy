@@ -5,6 +5,7 @@ RSpec.describe EcsDeploy::TaskDefinition do
 
   before do
     allow(Aws::ECS::Client).to receive(:new).and_return(ecs_client)
+    described_class.digest_cache.clear
   end
 
   # digest of 64 hex chars
@@ -144,6 +145,34 @@ RSpec.describe EcsDeploy::TaskDefinition do
         ).register
 
         expect(registered_images).to eq(["registry/repo@#{digest}"])
+      end
+
+      it "caches the resolved digest per image and inspects it only once per process" do
+        stub_imagetools("registry/repo:tag", stdout: "#{digest}\n")
+
+        2.times do
+          described_class.new(
+            task_definition_name: "td",
+            use_digest: true,
+            container_definitions: [{ name: "app", image: "registry/repo:tag" }],
+          ).register
+        end
+
+        expect(Open3).to have_received(:capture3).once
+      end
+
+      it "does not cache when resolution fails" do
+        status = instance_double(Process::Status, success?: false)
+        allow(Open3).to receive(:capture3).and_return(["", "boom", status])
+
+        td = described_class.new(
+          task_definition_name: "td",
+          use_digest: true,
+          container_definitions: [{ name: "app", image: "registry/repo:tag" }],
+        )
+
+        expect { td.register }.to raise_error(EcsDeploy::Error)
+        expect(described_class.digest_cache).to be_empty
       end
 
       it "raises EcsDeploy::Error when the docker command fails" do

@@ -5,6 +5,14 @@ module EcsDeploy
     DIGEST_SUFFIX = /@sha256:[0-9a-f]{64}\z/
     DIGEST_FORMAT = /\Asha256:[0-9a-f]{64}\z/
 
+    # Process-wide cache of resolved digests keyed by image reference,
+    # so the same image is only inspected via docker once per process.
+    @digest_cache = {}
+
+    class << self
+      attr_reader :digest_cache
+    end
+
     def self.deregister(arn, region: nil)
       region ||= EcsDeploy.config.default_region
       params ||= EcsDeploy.config.ecs_client_params
@@ -94,6 +102,12 @@ module EcsDeploy
     end
 
     def fetch_manifest_digest(image)
+      cache = self.class.digest_cache
+      if (cached = cache[image])
+        EcsDeploy.logger.debug "using cached digest for #{image}: #{cached}"
+        return cached
+      end
+
       EcsDeploy.logger.debug "docker buildx imagetools inspect --format '{{.Manifest.Digest}}' #{image}"
       stdout, stderr, status =
         Open3.capture3(@docker_buildx_env, "docker", "buildx", "imagetools", "inspect", "--format", "{{.Manifest.Digest}}", image)
@@ -104,7 +118,7 @@ module EcsDeploy
       unless digest =~ DIGEST_FORMAT
         raise EcsDeploy::Error, "Unexpected digest for '#{image}': #{digest.inspect}"
       end
-      digest
+      cache[image] = digest
     rescue Errno::ENOENT => e
       raise EcsDeploy::Error, "docker command not found: #{e.message}"
     end
