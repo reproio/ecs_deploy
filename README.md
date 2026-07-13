@@ -30,11 +30,13 @@ set :ecs_deploy_wait_timeout, 600 # default: 300
 set :ecs_wait_until_services_stable_max_attempts, 40 # optional
 set :ecs_wait_until_services_stable_delay, 15 # optional
 set :ecs_client_params, { retry_mode: "standard", max_attempts: 10 } # default: {}
+set :ecs_docker_buildx_env, { "DOCKER_CONFIG" => "/path/to/docker/config" } # optional. Env vars for the `docker buildx` command used by use_digest. Merged with each task's docker_buildx_env (the per-task one takes precedence). default: {}
 
 set :ecs_tasks, [
   {
     name: "myapp-#{fetch(:rails_env)}",
     use_digest: true, # optional. When true, each container_definitions[].image is rewritten to a digest reference (registry/repo@sha256:...) resolved via `docker buildx imagetools inspect` at registration time. Requires the `docker` CLI with buildx on the deploy host; resolution failure aborts the deploy.
+    docker_buildx_env: { "DOCKER_CONFIG" => "/path/to/docker/config" }, # optional. Env vars for the `docker buildx` command. Merged on top of :ecs_docker_buildx_env.
     container_definitions: [
       {
         name: "myapp",

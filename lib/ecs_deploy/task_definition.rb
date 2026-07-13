@@ -15,9 +15,12 @@ module EcsDeploy
       EcsDeploy.logger.info "deregistered task definition [#{arn}] [#{client.config.region}] [#{Paint['OK', :green]}]"
     end
 
-    def initialize(task_definition_name:, region: nil, use_digest: false, **options)
+    def initialize(task_definition_name:, region: nil, use_digest: false, docker_buildx_env: nil, **options)
       @task_definition_name = task_definition_name
       @use_digest = use_digest
+      @docker_buildx_env = (EcsDeploy.config.docker_buildx_env || {})
+        .merge(docker_buildx_env || {})
+        .map { |k, v| [k.to_s, v&.to_s] }.to_h
       region ||= EcsDeploy.config.default_region
       params ||= EcsDeploy.config.ecs_client_params
 
@@ -93,7 +96,7 @@ module EcsDeploy
     def fetch_manifest_digest(image)
       EcsDeploy.logger.debug "docker buildx imagetools inspect --format '{{.Manifest.Digest}}' #{image}"
       stdout, stderr, status =
-        Open3.capture3("docker", "buildx", "imagetools", "inspect", "--format", "{{.Manifest.Digest}}", image)
+        Open3.capture3(@docker_buildx_env, "docker", "buildx", "imagetools", "inspect", "--format", "{{.Manifest.Digest}}", image)
       unless status.success?
         raise EcsDeploy::Error, "docker buildx imagetools inspect failed for '#{image}': #{stderr.strip}"
       end

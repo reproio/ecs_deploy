@@ -10,10 +10,10 @@ RSpec.describe EcsDeploy::TaskDefinition do
   # digest of 64 hex chars
   let(:digest) { "sha256:#{"a" * 64}" }
 
-  def stub_imagetools(image, stdout:, success: true)
+  def stub_imagetools(image, stdout:, success: true, env: {})
     status = instance_double(Process::Status, success?: success)
     allow(Open3).to receive(:capture3)
-      .with("docker", "buildx", "imagetools", "inspect", "--format", "{{.Manifest.Digest}}", image)
+      .with(env, "docker", "buildx", "imagetools", "inspect", "--format", "{{.Manifest.Digest}}", image)
       .and_return([stdout, "", status])
   end
 
@@ -101,6 +101,49 @@ RSpec.describe EcsDeploy::TaskDefinition do
         ).register
 
         expect(registered_images).to eq(["registry/repo1@#{digest}", "registry/repo2@#{digest2}"])
+      end
+
+      it "passes docker_buildx_env to the docker command" do
+        env = { "DOCKER_CONFIG" => "/tmp/docker" }
+        stub_imagetools("registry/repo:tag", stdout: "#{digest}\n", env: env)
+
+        described_class.new(
+          task_definition_name: "td",
+          use_digest: true,
+          docker_buildx_env: env,
+          container_definitions: [{ name: "app", image: "registry/repo:tag" }],
+        ).register
+
+        expect(registered_images).to eq(["registry/repo@#{digest}"])
+      end
+
+      it "stringifies docker_buildx_env keys and values" do
+        stub_imagetools("registry/repo:tag", stdout: "#{digest}\n", env: { "FOO" => "1" })
+
+        described_class.new(
+          task_definition_name: "td",
+          use_digest: true,
+          docker_buildx_env: { FOO: 1 },
+          container_definitions: [{ name: "app", image: "registry/repo:tag" }],
+        ).register
+
+        expect(registered_images).to eq(["registry/repo@#{digest}"])
+      end
+
+      it "merges the global docker_buildx_env with the per-task one, task taking precedence" do
+        allow(EcsDeploy.config).to receive(:docker_buildx_env)
+          .and_return({ "DOCKER_CONFIG" => "/global", "HTTP_PROXY" => "http://proxy" })
+        merged = { "DOCKER_CONFIG" => "/task", "HTTP_PROXY" => "http://proxy" }
+        stub_imagetools("registry/repo:tag", stdout: "#{digest}\n", env: merged)
+
+        described_class.new(
+          task_definition_name: "td",
+          use_digest: true,
+          docker_buildx_env: { "DOCKER_CONFIG" => "/task" },
+          container_definitions: [{ name: "app", image: "registry/repo:tag" }],
+        ).register
+
+        expect(registered_images).to eq(["registry/repo@#{digest}"])
       end
 
       it "raises EcsDeploy::Error when the docker command fails" do
